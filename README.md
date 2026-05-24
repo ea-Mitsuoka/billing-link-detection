@@ -17,7 +17,7 @@ Cloud Logging → Cloud Monitoring
     → バッチ・Functions のエラーを Slack 通知
 ```
 
-詳細は [`requirements.md`](./requirements.md) を参照。
+詳細は [`requirements.md`](./docs/requirements.md) を参照。
 
 ______________________________________________________________________
 
@@ -180,7 +180,7 @@ ______________________________________________________________________
 ### Step 1: GCP 手動セットアップ（terraform apply 前に必要）
 
 `terraform apply` だけでは完結しない手動作業がある。
-**[`initial_setup.md`](./initial_setup.md) の Phase 1〜3 をすべて完了させてから** 次へ進む。
+**[`initial_setup.md`](./docs/initial_setup.md) の Phase 1〜3 をすべて完了させてから** 次へ進む。
 
 | Phase | 内容 | 目安時間 |
 |---|---|---|
@@ -242,7 +242,7 @@ ______________________________________________________________________
 
 ### Step 5: デプロイ後の仕上げ
 
-[`initial_setup.md`](./initial_setup.md) の **Phase 4** を実施する。
+[`initial_setup.md`](./docs/initial_setup.md) の **Phase 4** を実施する。
 
 ```bash
 # Terraform が出力した SA のメールアドレスを確認
@@ -314,9 +314,9 @@ ______________________________________________________________________
 
 | ファイル | 内容 |
 |---|---|
-| [`requirements.md`](./requirements.md) | 要件定義・テーブルスキーマ・処理フロー・テスト観点 |
-| [`alert_design.md`](./alert_design.md) | アラートシステム設計・Function コード・Terraform 定義 |
-| [`initial_setup.md`](./initial_setup.md) | 初回セットアップ手順（手動作業まとめ） |
-| [`decisions.md`](./decisions.md) | 設計上の選択肢と採用・却下の記録 |
-| [`merge_sql_prototype.md`](./merge_sql_prototype.md) | BigQuery MERGE SQL プロトタイプ（実装参照用） |
-| [`data_source_investigation.md`](./data_source_investigation.md) | Billing API / Billing Export の調査結果・確認クエリ |
+| [`docs/requirements.md`](./docs/requirements.md) | 要件定義・テーブルスキーマ・処理フロー・テスト観点 |
+| [`docs/alert_design.md`](./docs/alert_design.md) | アラートシステム設計・Function コード・Terraform 定義 |
+| [`docs/initial_setup.md`](./docs/initial_setup.md) | 初回セットアップ手順（手動作業まとめ） |
+| [`docs/decisions.md`](./docs/decisions.md) | 設計上の選択肢と採用・却下の記録 |
+| [`docs/merge_sql_prototype.md`](./docs/merge_sql_prototype.md) | BigQuery MERGE SQL プロトタイプ（実装参照用） |
+| [`docs/data_source_investigation.md`](./docs/data_source_investigation.md) | Billing API / Billing Export の調査結果・確認クエリ |
