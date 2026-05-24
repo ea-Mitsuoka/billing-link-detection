@@ -1,0 +1,112 @@
+name: deploy
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+env:
+  TF_VAR_project_id:             ${{ vars.GCP_PROJECT_ID }}
+  TF_VAR_region:                 asia-northeast1
+  TF_VAR_parent_billing_account: ${{ secrets.PARENT_BILLING_ACCOUNT }}
+  TF_VAR_billing_export_dataset: ${{ vars.BILLING_EXPORT_DATASET }}
+  TF_VAR_billing_export_table:   ${{ vars.BILLING_EXPORT_TABLE }}
+  TF_VAR_monitoring_slack_channel: ${{ vars.MONITORING_SLACK_CHANNEL }}
+
+permissions:
+  contents: read
+  id-token: write   # Workload Identity Federation で必須
+  pull-requests: write
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install batch dependencies
+        working-directory: batch
+        run: uv pip sync requirements.txt --system
+
+      - name: Install alert dependencies
+        working-directory: alert
+        run: uv pip sync requirements.txt --system
+
+      - name: Run unit tests
+        run: |
+          # 実装時に pytest 設定を追加
+          # uv run pytest batch/tests alert/tests
+          echo "TODO: add pytest invocation when tests are implemented"
+
+  terraform-plan:
+    needs: lint-and-test
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.TERRAFORM_SA_EMAIL }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.6.0
+
+      - name: Terraform Init
+        working-directory: terraform
+        run: terraform init -backend-config="bucket=${{ vars.GCP_PROJECT_ID }}-tfstate"
+
+      - name: Terraform Plan
+        working-directory: terraform
+        run: terraform plan -no-color
+        continue-on-error: true
+
+  terraform-apply:
+    needs: lint-and-test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.TERRAFORM_SA_EMAIL }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker asia-northeast1-docker.pkg.dev --quiet
+
+      - name: Build and push batch image
+        working-directory: batch
+        run: |
+          IMAGE="asia-northeast1-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/billing-link-detection/billing-collector:${{ github.sha }}"
+          docker build -t "$IMAGE" .
+          docker push "$IMAGE"
+          echo "IMAGE_URI=$IMAGE" >> $GITHUB_ENV
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.6.0
+
+      - name: Terraform Init
+        working-directory: terraform
+        run: terraform init -backend-config="bucket=${{ vars.GCP_PROJECT_ID }}-tfstate"
+
+      - name: Terraform Apply
+        working-directory: terraform
+        env:
+          TF_VAR_batch_image: ${{ env.IMAGE_URI }}
+        run: terraform apply -auto-approve

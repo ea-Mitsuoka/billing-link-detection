@@ -1,0 +1,6 @@
+# このファイルは requirements.in から uv で生成する。手動編集禁止。
+# 再生成コマンド: uv pip compile requirements.in -o requirements.txt
+
+google-cloud-bigquery==3.25.0
+google-cloud-billing==1.15.0
+google-cloud-logging==3.11.0

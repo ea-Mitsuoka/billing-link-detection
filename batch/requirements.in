@@ -1,0 +1,7 @@
+# 直接依存パッケージ（抽象バージョン指定）
+# ピン留め済みの requirements.txt は以下で再生成する:
+#   uv pip compile requirements.in -o requirements.txt
+
+google-cloud-bigquery>=3.0.0
+google-cloud-billing>=1.0.0
+google-cloud-logging>=3.0.0
