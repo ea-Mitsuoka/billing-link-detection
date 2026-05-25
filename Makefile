@@ -13,8 +13,7 @@ help:  ## このヘルプを表示
 
 install:  ## 依存パッケージをインストール（batch + alert + dev）
 	uv venv
-	uv pip sync batch/requirements.txt alert/requirements.txt
-	uv pip install pytest pytest-mock
+	uv pip install -r batch/requirements.txt -r alert/requirements.txt pytest pytest-mock
 
 test:  ## ユニットテストを実行（pytest）
 	uv run pytest
