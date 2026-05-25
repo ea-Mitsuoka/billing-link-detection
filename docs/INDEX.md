@@ -11,6 +11,7 @@ ______________________________________________________________________
 |---|---|
 | **このシステムが何をやっているか知りたい** | [architecture.md](./architecture.md) → [business_context.md](./business_context.md) |
 | **初めて触るので開発環境をセットアップしたい** | [../README.md](../README.md) §ローカル開発環境 |
+| **どんなコマンドが使えるか分からない** | `make help`（リポジトリルートで実行） |
 | **本番環境を構築したい（初回）** | [initial_setup.md](./initial_setup.md) |
 | **アラートを追加・変更したい** | [alert_design.md](./alert_design.md) §3, §4 |
 | **バッチが失敗した・通知が来ない** | [operations.md](./operations.md) §障害対応フロー |

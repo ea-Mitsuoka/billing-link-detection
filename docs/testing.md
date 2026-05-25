@@ -8,7 +8,7 @@ ______________________________________________________________________
 
 ```bash
 # プロジェクトルートで実行
-python -m pytest
+make test                  # or `python -m pytest`
 
 # 結果: 19 passed in ~0.5s
 ```
@@ -16,6 +16,9 @@ python -m pytest
 依存パッケージのインストール：
 
 ```bash
+make install               # batch + alert + dev deps を一括インストール
+
+# 手動で行う場合
 uv pip install pytest pytest-mock --system
 uv pip sync batch/requirements.txt --system
 uv pip sync alert/requirements.txt --system
@@ -221,7 +224,7 @@ ______________________________________________________________________
     terraform validate
 ```
 
-PR が main にマージされる前に必ず通る。
+PR が main にマージされる前に必ず通る。**ローカルで同じチェックを走らせる** には `make lint && make test`。
 
 ______________________________________________________________________
 

@@ -243,6 +243,89 @@ echo -n "xoxb-NEW-TOKEN" | \
 gcloud functions deploy alert-handler --region=asia-northeast1
 ```
 
+### 全リソースを destroy → apply で作り直す（検証・大規模変更用）
+
+通常は不要。**Terraform state のクリーンアップ・スキーマ大幅変更・別プロジェクトへの移行などで全リソースをゼロから再構築したい場合の手順**。
+
+> **警告**: BigQuery テーブル・Secret Manager・Cloud Run Jobs などをすべて削除する。BigQuery のデータは永久消失する（`billing_project_links` の履歴含む）。本番で実施する前に BQ Export 等でバックアップを取ること。
+
+```mermaid
+flowchart TD
+    A[1. prevent_destroy を false に] --> B[2. terraform destroy]
+    B --> C{2 回目で<br/>完了？}
+    C -->|No| D[log metric の eventual consistency<br/>→ 再 destroy で消える]
+    C -->|Yes| E[3. batch_image を空文字に]
+    D --> E
+    E --> F[4. Slack secret に placeholder version 追加]
+    F --> G[5. terraform apply]
+    G --> H{エラー？}
+    H -->|metric 404| I[5-10 分待って再 apply]
+    H -->|No| J[6. prevent_destroy を true に戻す]
+    I --> J
+    J --> K[7. plan で No changes 確認]
+```
+
+**手順詳細**
+
+1. `terraform/main.tf` で `billing_project_links` の `prevent_destroy = true` → `false` に変更
+
+   ```hcl
+   lifecycle {
+     prevent_destroy = false # TEMPORARY: destroy 検証中。終了後 true に戻す
+   }
+   ```
+
+1. destroy 実行
+
+   ```bash
+   cd terraform
+   terraform destroy -auto-approve
+   ```
+
+   > **既知の問題**: log-based metric が「alerting policy にまだ使われている」エラーで 1〜2 件残ることがある（GCP の eventual consistency）。`terraform destroy` を **もう一度実行すれば消える**。
+
+1. `terraform/terraform.tfvars` の `batch_image` を空文字に変更
+
+   ```hcl
+   batch_image = "" # locals で python:3.12-slim にフォールバック
+   ```
+
+   理由: Artifact Registry も destroy で消えているため、既存タグ（`v1.0.0` 等）を指定してもイメージが存在せず Cloud Run Jobs の作成が失敗する。
+
+1. Slack secret に placeholder バージョンを投入
+
+   ```bash
+   echo -n "placeholder" | \
+     gcloud secrets versions add slack-bot-token \
+       --data-file=- \
+       --project=${GCP_PROJECT_ID}
+   ```
+
+   理由: `google_secret_manager_secret` リソースは secret 本体だけ作るため `version=latest` が空になり、Cloud Function の起動に失敗する。
+
+1. apply 実行
+
+   ```bash
+   terraform apply -auto-approve
+   ```
+
+   > **既知の問題**: 新規作成した log-based metric が、直後に alerting policy から参照される際に「metric not found」エラー（404）になる。これは GCP 側の eventual consistency（最大 10 分）で解消する。**5〜10 分後に再 apply** すればパスする。
+
+1. `prevent_destroy = true` に戻す（main.tf）
+
+1. 動作確認
+
+   ```bash
+   terraform plan
+   # → "No changes" であること
+   ```
+
+1. **稼働再開のための追加作業**:
+
+   - Slack Bot Token を placeholder から本物に置き換える（[Slack Bot Token をローテーション](#slack-bot-token-%E3%82%92%E3%83%AD%E3%83%BC%E3%83%86%E3%83%BC%E3%82%B7%E3%83%A7%E3%83%B3) 参照）
+   - Docker イメージを Artifact Registry に push し直す（CI/CD で `main` に push すれば自動）
+   - `batch_image` を本物のタグに戻す（`terraform.tfvars` または GitHub Variables）
+
 ______________________________________________________________________
 
 ## 設定変更時のチェックリスト

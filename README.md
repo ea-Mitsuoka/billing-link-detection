@@ -60,6 +60,7 @@ billing-link-detection/
 │   └── variables.tf
 ├── .github/workflows/
 │   └── deploy.yml           # GitHub Actions（lint/test/plan/apply）
+├── Makefile                 # 開発コマンド集約（make help で一覧）
 ├── pyproject.toml           # pytest 設定
 └── docs/                    # 詳細ドキュメント（下記）
 ```
@@ -94,25 +95,27 @@ ______________________________________________________________________
 # 1. GCP 認証
 gcloud auth application-default login
 
-# 2. 依存パッケージ
-cd batch && uv pip sync requirements.txt && cd ..
-cd alert && uv pip sync requirements.txt && cd ..
+# 2. 依存パッケージ（batch + alert + dev を一括）
+make install
 
 # 3. テスト実行（GCP 接続不要）
-python -m pytest
+make test
 
-# 4. バッチをローカル実行
+# 4. push 前のチェック（CI と同等の terraform fmt-check + validate）
+make lint
+
+# 5. バッチをローカル実行
 cd batch
 cp .env.example .env  # 値を埋める
 source .env && uv run python main.py
 
-# 5. Cloud Functions をローカル起動
+# 6. Cloud Functions をローカル起動
 cd alert
 source .env
 uv run functions-framework --target=alert_handler --debug
 ```
 
-詳細とテスト設計は [docs/testing.md](./docs/testing.md)。
+`make help` で全コマンド一覧。詳細とテスト設計は [docs/testing.md](./docs/testing.md)。
 
 ### 本番環境を初めて作る
 
