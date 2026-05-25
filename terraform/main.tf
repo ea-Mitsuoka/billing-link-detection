@@ -287,7 +287,10 @@ resource "google_cloud_run_v2_job" "billing_collector" {
     }
   }
 
-  depends_on = [google_artifact_registry_repository.batch]
+  depends_on = [
+    google_artifact_registry_repository.batch,
+    google_service_account_iam_member.terraform_acts_as_collector,
+  ]
 }
 
 resource "google_cloud_run_v2_job" "billing_cost_updater" {
@@ -334,7 +337,10 @@ resource "google_cloud_run_v2_job" "billing_cost_updater" {
     }
   }
 
-  depends_on = [google_artifact_registry_repository.batch]
+  depends_on = [
+    google_artifact_registry_repository.batch,
+    google_service_account_iam_member.terraform_acts_as_collector,
+  ]
 }
 
 # ===================================================================
@@ -409,6 +415,8 @@ resource "google_cloudfunctions2_function" "alert_handler" {
       version    = "latest"
     }
   }
+
+  depends_on = [google_service_account_iam_member.terraform_acts_as_alert_handler]
 }
 
 # ===================================================================
