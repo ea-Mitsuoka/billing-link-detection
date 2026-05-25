@@ -210,6 +210,25 @@ resource "google_bigquery_dataset_iam_member" "alert_reads_billing_export" {
 }
 
 # ===================================================================
+# IAM — Terraform SA の actAs（Cloud Run / Cloud Functions 更新に必要）
+# terraform_sa_email が設定されている場合のみ作成
+# ===================================================================
+
+resource "google_service_account_iam_member" "terraform_acts_as_collector" {
+  count              = var.terraform_sa_email != "" ? 1 : 0
+  service_account_id = google_service_account.billing_collector.name
+  role               = "roles/iam.serviceAccountUser"
+  member             = "serviceAccount:${var.terraform_sa_email}"
+}
+
+resource "google_service_account_iam_member" "terraform_acts_as_alert_handler" {
+  count              = var.terraform_sa_email != "" ? 1 : 0
+  service_account_id = google_service_account.alert_handler.name
+  role               = "roles/iam.serviceAccountUser"
+  member             = "serviceAccount:${var.terraform_sa_email}"
+}
+
+# ===================================================================
 # IAM — Secret Manager
 # ===================================================================
 

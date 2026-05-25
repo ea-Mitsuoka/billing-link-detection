@@ -59,3 +59,9 @@ variable "monitoring_channel_display_name" {
   type        = string
   default     = ""
 }
+
+variable "terraform_sa_email" {
+  description = "Terraform を実行する SA のメールアドレス（Cloud Run / Cloud Functions 更新時に actAs 権限が必要）"
+  type        = string
+  default     = ""
+}
