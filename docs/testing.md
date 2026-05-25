@@ -10,7 +10,7 @@ ______________________________________________________________________
 # プロジェクトルートで実行
 python -m pytest
 
-# 結果: 18 passed in ~0.5s
+# 結果: 19 passed in ~0.5s
 ```
 
 依存パッケージのインストール：
@@ -156,6 +156,7 @@ ______________________________________________________________________
 | テスト | カバー内容 |
 |---|---|
 | `test_query_substitutes_project_and_dataset` | `{project}/{dataset}` 置換 |
+| `test_query_substitutes_billing_export_vars` | `{billing_export_project/dataset/table}` 置換 |
 | `test_no_results_returns_200_without_posting` | 0 件時は Slack に投げない |
 | `test_results_posted_to_slack_with_formatted_text` | 通常通知の整形 |
 | `test_truncates_when_exceeds_max_rows` | MAX_ROWS 超過時のトランケート + サフィックス |

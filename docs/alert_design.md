@@ -99,13 +99,23 @@ ______________________________________________________________________
 
 ### クエリの変数展開
 
-`alerts.yaml` のクエリ内の `{project}` と `{dataset}` は、Cloud Functions の実行時に環境変数から展開する。BigQuery のフルテーブル参照（`` `project.dataset.table` ``）を YAML に直接ハードコードしないことで、以下が実現できる。
+`alerts.yaml` のクエリ内のプレースホルダーは、Cloud Functions の実行時に環境変数から展開する。BigQuery のフルテーブル参照（`` `project.dataset.table` ``）を YAML に直接ハードコードしないことで、以下が実現できる。
 
 - **環境ごとの切り替え**: 開発・ステージング・本番の各環境で同じ alerts.yaml を共有しつつ、テーブル参照先のみ環境変数で切り替えられる
 - **プロジェクトID変更への耐性**: プロジェクトIDが変わっても YAML 修正不要
 - **YAML の可読性**: 長いフルパス（`` `my-prj-12345.billing_data.billing_project_links` ``）が `` `{project}.{dataset}.billing_project_links` `` に短縮される
 
-展開は Python の `str.format()` で実行されるため、`{` `}` を SQL 内で使用する場合（JSON 関数など）は `{{` `}}` でエスケープする必要がある。
+**使用できるプレースホルダー一覧**
+
+| プレースホルダー | 展開される値 | 用途 |
+|---|---|---|
+| `{project}` | `GCP_PROJECT_ID` 環境変数 | 分析システムのプロジェクト ID |
+| `{dataset}` | `BQ_DATASET` 環境変数 | `billing_project_links` を持つデータセット名 |
+| `{billing_export_project}` | `BILLING_EXPORT_PROJECT_ID`（未設定時は `GCP_PROJECT_ID`） | Billing Export 専用プロジェクト ID |
+| `{billing_export_dataset}` | `BILLING_EXPORT_DATASET`（未設定時は `billing_data`） | Billing Export のデータセット名 |
+| `{billing_export_table}` | `BILLING_EXPORT_TABLE` 環境変数 | Billing Export のテーブル名 |
+
+展開は Python の `str.format()` で実行されるため、`{` `}` を SQL 内で使用する場合（JSON 関数など）は `{{` `}}` でエスケープする必要がある。使用しないプレースホルダーは YAML クエリに書かなければ展開されない（余分な引数は無視される）。
 
 ### Slack 通知方式
 
@@ -156,6 +166,9 @@ def alert_handler(request):
     query   = payload["query"].format(
         project=os.environ["GCP_PROJECT_ID"],
         dataset=os.environ["BQ_DATASET"],
+        billing_export_project=os.environ.get("BILLING_EXPORT_PROJECT_ID") or os.environ["GCP_PROJECT_ID"],
+        billing_export_dataset=os.environ.get("BILLING_EXPORT_DATASET", "billing_data"),
+        billing_export_table=os.environ.get("BILLING_EXPORT_TABLE", ""),
     )
     channel = payload["channel"]
     message = payload["message"]
@@ -358,6 +371,7 @@ ______________________________________________________________________
 | `billing_newly_started` | 初回のみ（フラグが次バッチでリセットされる） | 「課金開始」は一度きりのイベント |
 | `zero_cost_projects` | 毎回通知（毎月6日） | 月次で状況を確認する定例チェック |
 | `never_billed_projects` | 毎回通知（毎月1日） | 月次で未課金プロジェクトを一覧確認する定例チェック |
+| `cost_surge_projects` | 毎回通知（毎月7日） | 前月vs前々月の30%超増加を月次で検知。閾値を超えている間は毎月通知される |
 
 `ever_billed = FALSE` のプロジェクト一覧（`never_billed_projects`）は、前月と同じプロジェクトが繰り返し通知される。これは**意図的な設計**であり、毎月の棚卸し確認として機能させる。「うるさい」場合は `gcloud scheduler jobs pause` で一時停止するか、alerts.yaml の `enabled: false` で無効化する。
 
@@ -381,11 +395,14 @@ ______________________________________________________________________
 |---|---|---|
 | タイムアウト | 120秒 | BQクエリ + Slack通知の合計でも数秒。余裕を持って120秒を上限とする |
 | メモリ | 256 MB | クエリ結果をメモリに展開する処理であり、300プロジェクト規模では256MBで十分 |
-| `GCP_PROJECT_ID` | Terraformの `var.project_id` | `{project}` のクエリ変数展開に使用 |
-| `BQ_DATASET` | Terraformの `var.bq_dataset` | `{dataset}` のクエリ変数展開に使用 |
+| `GCP_PROJECT_ID` | `var.project_id` | `{project}` 展開に使用 |
+| `BQ_DATASET` | `var.bq_dataset` | `{dataset}` 展開に使用 |
+| `BILLING_EXPORT_PROJECT_ID` | `local.billing_export_project`（空なら `project_id` と同値） | `{billing_export_project}` 展開に使用 |
+| `BILLING_EXPORT_DATASET` | `var.billing_export_dataset` | `{billing_export_dataset}` 展開に使用 |
+| `BILLING_EXPORT_TABLE` | `var.billing_export_table` | `{billing_export_table}` 展開に使用 |
 | `SLACK_BOT_TOKEN` | Secret Manager 参照 | Slack `chat.postMessage` API の認証に使用。平文で保持しない |
 
-これらはすべて上記 Terraform `service_config` ブロックで設定済み。
+これらはすべて Terraform `service_config` ブロックで設定済み。
 
 ______________________________________________________________________
 
@@ -441,8 +458,9 @@ Cloud Monitoring はインシデント単位で管理する。エラーログを
 
 | 変数名 | 推奨初期値 | 意味 |
 |---|---|---|
-| `monitoring_notification_rate_limit` | `86400s` | 同一インシデント内での最小再通知間隔（日次バッチは24時間で「1失敗1通知」） |
 | `monitoring_auto_close` | `86400s` | エラーログが出なくなってからインシデントを自動クローズするまでの時間 |
+
+> `notification_rate_limit`（再通知間隔の制限）はログベースアラートポリシー専用オプションのため、本システムが使用するメトリクス閾値ベースのポリシーには設定しない。
 
 ### Terraform 定義例
 
@@ -491,9 +509,6 @@ resource "google_monitoring_alert_policy" "batch_error" {
   notification_channels = [data.google_monitoring_notification_channel.slack.name]
 
   alert_strategy {
-    notification_rate_limit {
-      period = var.monitoring_notification_rate_limit
-    }
     auto_close = var.monitoring_auto_close
   }
 }
@@ -537,4 +552,4 @@ data "google_monitoring_notification_channel" "slack" {
 | Cloud Functions 実行 | $0 | 無料枠200万回/月に対して数十〜数百回 |
 | Cloud Scheduler | $0〜 | 3ジョブまで無料。超過分は$0.10/job/月 |
 | BigQuery クエリ | $0 | 無料枠1TB/月に対してスキャン量が無視できる規模 |
-| **合計（アラート3件の場合）** | **$0〜$0.20/月** | データ収集2ジョブ（日次・月次）+ アラート3ジョブ = 計5ジョブ。超過2ジョブ×$0.10 |
+| **合計（アラート4件の場合）** | **$0〜$0.30/月** | データ収集2ジョブ（日次・月次）+ アラート4ジョブ = 計6ジョブ。超過3ジョブ×$0.10 |

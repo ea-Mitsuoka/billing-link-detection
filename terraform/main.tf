@@ -201,6 +201,14 @@ resource "google_bigquery_dataset_iam_member" "collector_reads_billing_export" {
   member     = "serviceAccount:${google_service_account.billing_collector.email}"
 }
 
+resource "google_bigquery_dataset_iam_member" "alert_reads_billing_export" {
+  count      = var.billing_export_project_id != "" ? 1 : 0
+  project    = var.billing_export_project_id
+  dataset_id = var.billing_export_dataset
+  role       = "roles/bigquery.dataViewer"
+  member     = "serviceAccount:${google_service_account.alert_handler.email}"
+}
+
 # ===================================================================
 # IAM — Secret Manager
 # ===================================================================
@@ -368,8 +376,11 @@ resource "google_cloudfunctions2_function" "alert_handler" {
     service_account_email = google_service_account.alert_handler.email
 
     environment_variables = {
-      GCP_PROJECT_ID = var.project_id
-      BQ_DATASET     = var.bq_dataset
+      GCP_PROJECT_ID            = var.project_id
+      BQ_DATASET                = var.bq_dataset
+      BILLING_EXPORT_PROJECT_ID = local.billing_export_project
+      BILLING_EXPORT_DATASET    = var.billing_export_dataset
+      BILLING_EXPORT_TABLE      = var.billing_export_table
     }
 
     secret_environment_variables {

@@ -22,6 +22,9 @@ def alert_handler(request):
     query   = payload["query"].format(
         project=os.environ["GCP_PROJECT_ID"],
         dataset=os.environ["BQ_DATASET"],
+        billing_export_project=os.environ.get("BILLING_EXPORT_PROJECT_ID") or os.environ["GCP_PROJECT_ID"],
+        billing_export_dataset=os.environ.get("BILLING_EXPORT_DATASET", "billing_data"),
+        billing_export_table=os.environ.get("BILLING_EXPORT_TABLE", ""),
     )
     channel = payload["channel"]
     message = payload["message"]

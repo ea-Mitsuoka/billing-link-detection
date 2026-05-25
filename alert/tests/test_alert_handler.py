@@ -48,6 +48,27 @@ def test_query_substitutes_project_and_dataset(alert_module):
     assert "test-project.billing_data_test.t" in captured["sql"]
 
 
+def test_query_substitutes_billing_export_vars(alert_module):
+    """{billing_export_project}/{billing_export_dataset}/{billing_export_table} が env から置換される。"""
+    captured = {}
+
+    def fake_query(q, **kwargs):
+        captured["sql"] = q
+        result = MagicMock()
+        result.result.return_value = iter([])
+        return result
+
+    with patch.object(alert_module.bigquery, "Client") as bq_cls:
+        bq_cls.return_value.query.side_effect = fake_query
+        req = _mk_request(
+            "FROM `{billing_export_project}.{billing_export_dataset}.{billing_export_table}`",
+            "#ch", "msg",
+        )
+        alert_module.alert_handler(req)
+
+    assert "test-export-project.billing_data.gcp_billing_export_v1_TEST" in captured["sql"]
+
+
 def test_no_results_returns_200_without_posting(alert_module):
     """ヒット 0 件のときは Slack に投稿しない。"""
     with patch.object(alert_module.bigquery, "Client") as bq_cls, \
