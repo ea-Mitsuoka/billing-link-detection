@@ -1,0 +1,13 @@
+# terraform.tfvars.example
+# cp terraform.tfvars.example terraform.tfvars して実際の値を埋める。
+# terraform.tfvars は .gitignore 対象のため Git にコミットされない。
+
+project_id               = "your-project-id"
+region                   = "asia-northeast1"
+bq_dataset               = "billing_data"
+parent_billing_account   = "XXXXXX-YYYYYY-ZZZZZZ"
+billing_export_dataset   = "billing_data"
+billing_export_table     = "gcp_billing_export_v1_XXXXXX_YYYYYY"
+monitoring_slack_channel    = "#alerts-gcp-billing"
+billing_export_project_id   = "your-billing-export-project-id"
+monitoring_channel_display_name = "Slack - alerts-gcp-billing"

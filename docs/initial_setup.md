@@ -168,10 +168,12 @@ gcloud iam service-accounts add-iam-policy-binding ${SA_EMAIL} \
 
 | 名前 | 値の例 | 用途 |
 |---|---|---|
-| `GCP_PROJECT_ID` | `your-project-id` | Terraform / Docker 認証先 |
+| `GCP_PROJECT_ID` | `your-project-id` | 分析システム側のプロジェクト ID。Terraform / Docker 認証先 |
+| `BILLING_EXPORT_PROJECT_ID` | `billing-export-project-id` | Billing Export 専用プロジェクト ID。**構成 A（単一プロジェクト）の場合は空文字** |
 | `BILLING_EXPORT_DATASET` | `billing_data` | Billing Export のデータセット名（terraform.tfvars と同じ値） |
 | `BILLING_EXPORT_TABLE` | `gcp_billing_export_v1_XXXXXX` | Billing Export のテーブル名 |
 | `MONITORING_SLACK_CHANNEL` | `#alerts-gcp-billing` | Cloud Monitoring のシステムエラー通知先 |
+| `MONITORING_CHANNEL_DISPLAY_NAME` | `Slack - alerts-gcp-billing` | Phase 4-2 で手動作成した Notification Channel の display_name。**初回 apply 時は空文字でも可（アラートポリシーは notification なしで作られる）** |
 
 **Secrets（外部に漏らしたくない値）**
 
@@ -189,18 +191,40 @@ ______________________________________________________________________
 
 ### 3-1. Cloud Billing Export の有効化（GUIのみ・API不可）
 
+#### 構成パターンの選択
+
+エクスポート先プロジェクトは **GCP の制約により、親請求先アカウント直下のプロジェクトのみ** 選択可能。
+分析システムをデプロイするプロジェクトが「親請求先アカウント直下にない」場合は、**Billing Export 専用のプロジェクトを別に作成** する必要がある。
+
+| 構成 | 推奨される場合 | 設定 |
+|---|---|---|
+| A: 単一プロジェクト | 分析システムが既に親請求先アカウント直下にある | `billing_export_project_id = ""`（未設定） |
+| B: 2 プロジェクト | 分析システムが別の請求先アカウントにリンク済み | `billing_export_project_id = "<export 専用プロジェクト ID>"` |
+
+構成 B の場合、Export 専用プロジェクトを先に作成して dragon.jp 等の親請求先アカウントにリンクしてから設定すること。詳細は [architecture.md §7 プロジェクト分離](./architecture.md#7-%E3%83%97%E3%83%AD%E3%82%B8%E3%82%A7%E3%82%AF%E3%83%88%E5%88%86%E9%9B%A22-%E3%83%97%E3%83%AD%E3%82%B8%E3%82%A7%E3%82%AF%E3%83%88%E6%A7%8B%E6%88%90)。
+
+#### 設定手順
+
 1. GCPコンソール → 「お支払い」→「請求データのエクスポート」を開く
 1. **親請求先アカウント**を選択した状態で「BigQueryへのエクスポートを編集」をクリック
 1. 以下を設定して保存する
 
 | 項目 | 設定値 |
 |---|---|
-| プロジェクト | PROJECT_ID（このシステムのプロジェクト） |
-| データセット | `billing_data`（`billing_project_links` テーブルと同じデータセット。terraform.tfvars の `billing_export_dataset` の値と一致させる） |
+| プロジェクト | 構成 A: 分析システムのプロジェクト ID / 構成 B: Billing Export 専用プロジェクト ID |
+| データセット | `billing_data`（terraform.tfvars の `billing_export_dataset` の値と一致させる） |
 | エクスポート種類 | 標準使用量のコスト |
 
 4. エクスポートテーブル名（`gcp_billing_export_v1_XXXXXX`）を控えておく\
-   → Terraform変数・バッチコードに設定が必要
+   → `terraform.tfvars` の `billing_export_table` と GitHub Variables の `BILLING_EXPORT_TABLE` に設定する
+
+1. 構成 B の場合: Billing Export 専用プロジェクト側で **Terraform 実行 SA（sa-terraform）に `roles/bigquery.admin` を付与** する（クロスプロジェクトのデータセット IAM 操作のため）
+
+   ```bash
+   gcloud projects add-iam-policy-binding EXPORT_PROJECT_ID \
+     --member="serviceAccount:sa-terraform@ANALYSIS_PROJECT_ID.iam.gserviceaccount.com" \
+     --role="roles/bigquery.admin"
+   ```
 
 > **注意**: エクスポートは設定した時点以降のデータしか蓄積されない。過去データは遡及されない。\
 > また、データ反映まで最大24時間かかる場合がある。
@@ -208,11 +232,15 @@ ______________________________________________________________________
 ### 3-2. Slack App の作成とBot Token取得
 
 1. [api.slack.com/apps](https://api.slack.com/apps) → 「Create New App」→「From scratch」
-1. App Name・ワークスペースを設定
+1. App Name（例: `billing-link-detection`）・ワークスペースを設定
 1. 「OAuth & Permissions」→「Bot Token Scopes」に以下を追加
    - `chat:write`
    - `chat:write.public`（パブリックチャンネルにBotを招待せず投稿する場合）
 1. 「Install to Workspace」→ Bot User OAuth Token（`xoxb-...`）を取得
+
+> **「Install to Workspace」の権限がない場合**: Slack ワークスペースの管理者権限が必要。\
+> App の設定画面左メニュー「**Collaborators**」からシステム管理者を追加すると、管理者側で Install 作業を行うことができる。\
+> 追加後、管理者に Install を依頼し、発行された Bot Token を共有してもらう。
 
 ### 3-3. Bot Token を Secret Manager に登録
 
@@ -328,9 +356,14 @@ parent_billing_account              = "XXXXXX-YYYYYY-ZZZZZZ"
 billing_export_dataset              = "billing_data"
 billing_export_table                = "gcp_billing_export_v1_XXXXXX"
 monitoring_slack_channel            = "#alerts-gcp-billing"  # Cloud Monitoring のシステムエラー通知先
-monitoring_notification_rate_limit  = "86400s"  # 同一インシデント内の最小再通知間隔（24時間）
 monitoring_auto_close               = "86400s"  # エラー解消後の自動クローズ時間（24時間）
 batch_image                         = "asia-northeast1-docker.pkg.dev/YOUR_PROJECT_ID/billing-link-detection/billing-collector:latest"
+
+# Billing Export 専用プロジェクト（分析システムと別プロジェクトの場合のみ設定。同一プロジェクトなら空文字）
+billing_export_project_id           = ""
+
+# Cloud Monitoring Slack 通知チャンネルの display_name（Phase 4-2 で手動作成後に設定）
+monitoring_channel_display_name     = ""
 ```
 
 > `batch_image` は CI/CD で `TF_VAR_batch_image` として動的に上書きされる（GitHub Actions が Docker push 後のフル URI を渡す）。ローカル実行時のみ tfvars の値が使われる。

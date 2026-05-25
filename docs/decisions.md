@@ -18,6 +18,7 @@ ______________________________________________________________________
 | 8 | CI/CD 基盤 | GitHub Actions + Workload Identity Federation | Cloud Build |
 | 9 | Slack 通知方式 | Bot Token + `chat.postMessage` API | Incoming Webhook |
 | 10 | 月次バッチの実装方式 | 単一コンテナ（`BATCH_TYPE` 環境変数で分岐） | 日次・月次で別コンテナ（Dockerfile 分割） |
+| 11 | Billing Export の格納先プロジェクト | 分析システムとは別の専用プロジェクト（2プロジェクト構成） | 分析システムプロジェクトに同居 |
 
 ______________________________________________________________________
 
@@ -254,3 +255,29 @@ def main():
 if __name__ == "__main__":
     main()
 ```
+
+______________________________________________________________________
+
+## 11. Billing Export の格納先プロジェクト
+
+**採用**: 分析システムとは別の専用プロジェクト（2プロジェクト構成）\
+**却下**: 分析システムプロジェクトに Billing Export を同居させる
+
+**採用理由（専用プロジェクト）**
+
+- **GCP の UI 制約**: Billing Export の設定画面（GCP コンソールの「請求先アカウント」→「BigQuery へのエクスポート」）は、**エクスポート先として選択できるプロジェクトが「その親請求先アカウントに直接リンクされているプロジェクト」のみ** に制限されている。分析システムプロジェクトは dragon.jp の親請求先アカウントではなく社内の別請求先アカウントにリンクされているため、Export 先として選択できない
+- **設計の安定性**: Export 先プロジェクトを差し替える場合（例: 親請求先アカウントの切替）に、分析システムのインフラを巻き込まずに完結できる
+- **セキュリティ境界**: Billing Export テーブルは親請求先アカウント管理者の「持ち物」。分析システム側の Terraform や Cloud Run が誤って Export テーブルを書き換えないよう IAM 境界を分けたい
+
+**却下理由（同居）**
+
+- 上記 UI 制約を突破できない（技術的に不可能）
+- 仮に同居できたとしても、Export 先変更時に分析システムも巻き込まれる運用リスクがある
+
+**アーキテクチャ上の帰結**
+
+- `sa-billing-collector` はクロスプロジェクトで Export 専用プロジェクトの BigQuery データセットに `roles/bigquery.dataViewer` を付与される
+- `billing_export_project_id` 変数を `terraform.tfvars` に設定することで、クロスプロジェクトの BigQuery 参照が有効化される（空文字列のときは `google_project_iam_member` リソースが `count = 0` で生成されない）
+- Terraform SA も Export 専用プロジェクトに `roles/bigquery.admin` が必要（`billing_project_links` テーブルの IAM 設定のため）
+
+詳細構成図は [architecture.md §7](./architecture.md#7-%E3%83%97%E3%83%AD%E3%82%B8%E3%82%A7%E3%82%AF%E3%83%88%E5%88%86%E9%9B%A22-%E3%83%97%E3%83%AD%E3%82%B8%E3%82%A7%E3%82%AF%E3%83%88%E6%A7%8B%E6%88%90) を参照。

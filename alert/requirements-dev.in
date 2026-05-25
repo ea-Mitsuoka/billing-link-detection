@@ -1,0 +1,6 @@
+# テスト用の追加依存
+# 再生成: uv pip compile requirements-dev.in -o requirements-dev.txt
+
+-r requirements.in
+pytest>=8.0.0
+pytest-mock>=3.12.0

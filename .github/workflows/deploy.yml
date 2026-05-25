@@ -7,12 +7,14 @@ on:
     branches: [main]
 
 env:
-  TF_VAR_project_id:             ${{ vars.GCP_PROJECT_ID }}
-  TF_VAR_region:                 asia-northeast1
-  TF_VAR_parent_billing_account: ${{ secrets.PARENT_BILLING_ACCOUNT }}
-  TF_VAR_billing_export_dataset: ${{ vars.BILLING_EXPORT_DATASET }}
-  TF_VAR_billing_export_table:   ${{ vars.BILLING_EXPORT_TABLE }}
-  TF_VAR_monitoring_slack_channel: ${{ vars.MONITORING_SLACK_CHANNEL }}
+  TF_VAR_project_id:                      ${{ vars.GCP_PROJECT_ID }}
+  TF_VAR_region:                          asia-northeast1
+  TF_VAR_parent_billing_account:          ${{ secrets.PARENT_BILLING_ACCOUNT }}
+  TF_VAR_billing_export_dataset:          ${{ vars.BILLING_EXPORT_DATASET }}
+  TF_VAR_billing_export_table:            ${{ vars.BILLING_EXPORT_TABLE }}
+  TF_VAR_billing_export_project_id:       ${{ vars.BILLING_EXPORT_PROJECT_ID }}
+  TF_VAR_monitoring_slack_channel:        ${{ vars.MONITORING_SLACK_CHANNEL }}
+  TF_VAR_monitoring_channel_display_name: ${{ vars.MONITORING_CHANNEL_DISPLAY_NAME }}
 
 permissions:
   contents: read
@@ -39,11 +41,25 @@ jobs:
         working-directory: alert
         run: uv pip sync requirements.txt --system
 
+      - name: Install test dependencies
+        run: uv pip install pytest pytest-mock --system
+
       - name: Run unit tests
+        run: pytest
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.6.0
+
+      - name: Terraform fmt check
+        working-directory: terraform
+        run: terraform fmt -check -recursive
+
+      - name: Terraform validate
+        working-directory: terraform
         run: |
-          # 実装時に pytest 設定を追加
-          # uv run pytest batch/tests alert/tests
-          echo "TODO: add pytest invocation when tests are implemented"
+          terraform init -backend=false
+          terraform validate
 
   terraform-plan:
     needs: lint-and-test

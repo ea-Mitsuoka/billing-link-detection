@@ -1,0 +1,50 @@
+alerts:
+  - name: billing_newly_started
+    description: 未課金プロジェクトの課金開始検知（日次バッチ実行後に確認）
+    schedule: "0 9 * * *"           # 毎日 09:00 JST（日次バッチ 02:00 完了後）
+    query: |
+      SELECT
+        sub_account_name,
+        project_id,
+        first_billed_month,
+        FORMAT_TIMESTAMP('%Y-%m-%d', linked_at, 'Asia/Tokyo') AS linked_date
+      FROM `{project}.{dataset}.billing_project_links`
+      WHERE billing_newly_started = TRUE
+      ORDER BY first_billed_month DESC, sub_account_name
+    channel: "#sales-alerts"        # 要変更：営業向けチャンネル
+    message: "課金開始プロジェクトが検出されました"
+    enabled: true
+
+  - name: zero_cost_projects
+    description: 前月請求金額が0円のアクティブプロジェクト一覧（月次バッチ翌日に確認）
+    schedule: "0 9 6 * *"           # 毎月6日 09:00 JST（月次バッチが5日 03:00 完了後）
+    query: |
+      SELECT
+        sub_account_name,
+        project_id,
+        prev_month_cost,
+        ever_billed,
+        FORMAT_TIMESTAMP('%Y-%m-%d', linked_at, 'Asia/Tokyo') AS linked_date
+      FROM `{project}.{dataset}.billing_project_links`
+      WHERE prev_month_cost = 0
+        AND status = 'ACTIVE'
+      ORDER BY ever_billed, linked_at, sub_account_name
+    channel: "#cs-alerts"           # 要変更：CS向けチャンネル
+    message: "前月請求が0円のプロジェクト一覧"
+    enabled: true
+
+  - name: never_billed_projects
+    description: 過去に一度も課金がないアクティブプロジェクト一覧（月次確認）
+    schedule: "0 9 1 * *"           # 毎月1日 09:00 JST
+    query: |
+      SELECT
+        sub_account_name,
+        project_id,
+        FORMAT_TIMESTAMP('%Y-%m-%d', linked_at, 'Asia/Tokyo') AS linked_date
+      FROM `{project}.{dataset}.billing_project_links`
+      WHERE ever_billed = FALSE
+        AND status = 'ACTIVE'
+      ORDER BY linked_at, sub_account_name
+    channel: "#cs-alerts"           # 要変更：CS向けチャンネル
+    message: "過去に一度も課金がないプロジェクト一覧"
+    enabled: true
