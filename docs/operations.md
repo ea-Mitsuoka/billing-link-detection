@@ -21,7 +21,7 @@ flowchart TD
     B2 -->|No| B3[Scheduler 自体が停止/失敗<br/>→ pause されていないか確認]
     B2 -->|Yes| B4{Functions の<br/>ログは？}
     B4 -->|エラー| B5[alert-handler のログ確認<br/>→ SQL エラー / Slack エラー]
-    B4 -->|成功 "no results"| B6[BigQuery で<br/>アラート条件 SQL を直接実行<br/>→ ヒットしないだけ<br/>＝健全な状態かも]
+    B4 -->|成功 no results| B6[BigQuery で<br/>アラート条件 SQL を直接実行<br/>→ ヒットしないだけ<br/>= 健全な状態かも]
 
     M1[Cloud Monitoring の<br/>Alerting Policies を確認] --> M2{ポリシー有効？}
     M2 -->|No| M3[ポリシー有効化]
@@ -47,9 +47,9 @@ flowchart TD
     F1 --> Fix[修正]
     F2 --> Fix
     F3 --> Fix
-    F4 --> Rerun
+    F4 --> Rerun[gcloud run jobs execute]
 
-    Fix --> Rerun[gcloud run jobs execute]
+    Fix --> Rerun
     Rerun --> Verify[BigQuery で last_fetched_at が<br/>更新されたか確認]
 ```
 
