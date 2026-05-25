@@ -228,6 +228,22 @@ resource "google_service_account_iam_member" "terraform_acts_as_alert_handler" {
   member             = "serviceAccount:${var.terraform_sa_email}"
 }
 
+# GCP IAM の伝播遅延を吸収するための待機
+# actAs 権限付与直後に Cloud Run / Cloud Functions を更新すると 403 になるため
+# triggers により IAM バインディングが変わるたびに time_sleep が再作成され、常に待機が走る
+resource "time_sleep" "iam_propagation" {
+  count = var.terraform_sa_email != "" ? 1 : 0
+  depends_on = [
+    google_service_account_iam_member.terraform_acts_as_collector,
+    google_service_account_iam_member.terraform_acts_as_alert_handler,
+  ]
+  create_duration = "120s"
+  triggers = {
+    collector_iam = var.terraform_sa_email != "" ? google_service_account_iam_member.terraform_acts_as_collector[0].id : ""
+    alert_iam     = var.terraform_sa_email != "" ? google_service_account_iam_member.terraform_acts_as_alert_handler[0].id : ""
+  }
+}
+
 # ===================================================================
 # IAM — Secret Manager
 # ===================================================================
@@ -289,7 +305,7 @@ resource "google_cloud_run_v2_job" "billing_collector" {
 
   depends_on = [
     google_artifact_registry_repository.batch,
-    google_service_account_iam_member.terraform_acts_as_collector,
+    time_sleep.iam_propagation,
   ]
 }
 
@@ -339,7 +355,7 @@ resource "google_cloud_run_v2_job" "billing_cost_updater" {
 
   depends_on = [
     google_artifact_registry_repository.batch,
-    google_service_account_iam_member.terraform_acts_as_collector,
+    time_sleep.iam_propagation,
   ]
 }
 
@@ -416,7 +432,7 @@ resource "google_cloudfunctions2_function" "alert_handler" {
     }
   }
 
-  depends_on = [google_service_account_iam_member.terraform_acts_as_alert_handler]
+  depends_on = [time_sleep.iam_propagation]
 }
 
 # ===================================================================
