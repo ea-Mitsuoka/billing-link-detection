@@ -12,12 +12,12 @@ help:  ## このヘルプを表示
 	@awk 'BEGIN {FS = ":.*##"} /^[a-zA-Z_-]+:.*?##/ { printf "  \033[36m%-10s\033[0m %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
 
 install:  ## 依存パッケージをインストール（batch + alert + dev）
-	uv pip sync batch/requirements.txt --system
-	uv pip sync alert/requirements.txt --system
-	uv pip install pytest pytest-mock --system
+	uv venv
+	uv pip sync batch/requirements.txt alert/requirements.txt
+	uv pip install pytest pytest-mock
 
 test:  ## ユニットテストを実行（pytest）
-	pytest
+	uv run pytest
 
 fmt:  ## terraform fmt を再帰実行（書き換え）
 	cd terraform && terraform fmt -recursive
