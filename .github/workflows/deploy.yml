@@ -68,13 +68,16 @@ jobs:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
           service_account: ${{ secrets.TERRAFORM_SA_EMAIL }}
 
+      - name: Set project ID
+        run: echo "TF_VAR_project_id=$CLOUDSDK_CORE_PROJECT" >> $GITHUB_ENV
+
       - uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.9.8
 
       - name: Terraform Init
         working-directory: terraform
-        run: terraform init -backend-config="bucket=${{ vars.GCP_PROJECT_ID }}-tfstate"
+        run: terraform init -backend-config="bucket=${CLOUDSDK_CORE_PROJECT}-tfstate"
 
       - name: Terraform Plan
         working-directory: terraform
@@ -94,6 +97,9 @@ jobs:
           workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
           service_account: ${{ secrets.TERRAFORM_SA_EMAIL }}
 
+      - name: Set project ID
+        run: echo "TF_VAR_project_id=$CLOUDSDK_CORE_PROJECT" >> $GITHUB_ENV
+
       - uses: google-github-actions/setup-gcloud@v2
 
       - name: Configure Docker for Artifact Registry
@@ -102,7 +108,7 @@ jobs:
       - name: Build and push batch image
         working-directory: batch
         run: |
-          IMAGE="asia-northeast1-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/billing-link-detection/billing-collector:${{ github.sha }}"
+          IMAGE="asia-northeast1-docker.pkg.dev/${CLOUDSDK_CORE_PROJECT}/billing-link-detection/billing-collector:${{ github.sha }}"
           docker build -t "$IMAGE" .
           docker push "$IMAGE"
           echo "IMAGE_URI=$IMAGE" >> $GITHUB_ENV
@@ -113,7 +119,7 @@ jobs:
 
       - name: Terraform Init
         working-directory: terraform
-        run: terraform init -backend-config="bucket=${{ vars.GCP_PROJECT_ID }}-tfstate"
+        run: terraform init -backend-config="bucket=${CLOUDSDK_CORE_PROJECT}-tfstate"
 
       - name: Terraform Apply
         working-directory: terraform
