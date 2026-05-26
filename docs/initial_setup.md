@@ -233,9 +233,9 @@ ______________________________________________________________________
 
 1. [api.slack.com/apps](https://api.slack.com/apps) → 「Create New App」→「From scratch」
 1. App Name（例: `billing-link-detection`）・ワークスペースを設定
-1. 「OAuth & Permissions」→「Bot Token Scopes」に以下を追加
-   - `chat:write`
-   - `chat:write.public`（パブリックチャンネルにBotを招待せず投稿する場合）
+1. 「OAuth & Permissions」→「Bot Token Scopes」に以下を追加（**スコープを追加しないとインストールボタンが有効にならない**）
+   - `chat:write` … チャンネルへのメッセージ投稿に必須
+   - `chat:write.public` … Bot を招待せずパブリックチャンネルへ投稿する場合に必要
 1. 「Install to Workspace」→ Bot User OAuth Token（`xoxb-...`）を取得
 
 > **「Install to Workspace」の権限がない場合**: Slack ワークスペースの管理者権限が必要。\

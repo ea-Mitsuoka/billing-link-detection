@@ -82,7 +82,9 @@ resource "google_bigquery_table" "billing_project_links_test" {
 
 locals {
   alerts = [
-    for a in yamldecode(file("${path.module}/../alert/alerts.yaml"))["alerts"] : a
+    for a in yamldecode(file("${path.module}/../alert/alerts.yaml"))["alerts"] : merge(a, {
+      channel = lookup(var.alert_channel_overrides, a.name, a.channel)
+    })
     if a.enabled
   ]
   batch_image_resolved   = var.batch_image != "" ? var.batch_image : "python:3.12-slim"

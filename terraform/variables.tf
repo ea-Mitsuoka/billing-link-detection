@@ -65,3 +65,9 @@ variable "terraform_sa_email" {
   type        = string
   default     = ""
 }
+
+variable "alert_channel_overrides" {
+  description = "alerts.yaml の channel を上書きするマップ。キー: アラート名、値: Slack チャンネル名。未指定のアラートは alerts.yaml の値をそのまま使用"
+  type        = map(string)
+  default     = {}
+}
