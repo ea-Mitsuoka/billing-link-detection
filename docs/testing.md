@@ -10,7 +10,7 @@ ______________________________________________________________________
 # プロジェクトルートで実行
 make test                  # or `python -m pytest`
 
-# 結果: 19 passed in ~0.5s
+# 結果: 25 passed in ~0.5s
 ```
 
 依存パッケージのインストール：
@@ -151,7 +151,11 @@ ______________________________________________________________________
 | `test_sql_shape.py::test_monthly_merge_uses_left_join_for_zero_cost` | LEFT JOIN + COALESCE(0) で全件補完 |
 | `test_sql_shape.py::test_monthly_aggregation_filters_by_prev_month_yyyymm` | 前月 YYYYMM フィルタが正しく入る |
 | `test_sql_shape.py::test_step6_7_skipped_when_export_table_missing` | `BILLING_EXPORT_TABLE` 未設定時の早期 return |
+| `test_sql_shape.py::test_unlinked_update_uses_strict_less_than` | UNLINKED 化条件が `<` で、初回実行時に誤って全件 UNLINKED にならないこと |
+| `test_sql_shape.py::test_monthly_multi_currency_logs_warning_and_continues` | 複数通貨検出時に warning を出して処理継続 |
+| `test_sql_shape.py::test_monthly_no_warning_when_all_single_currency` | 全プロジェクトが単一通貨なら warning を出さない（誤検知防止） |
 | `test_fetch_api.py::test_records_have_expected_shape` | Billing API レスポンス → レコード dict の組み立て |
+| `test_fetch_api.py::test_display_name_none_is_normalized_to_none` | API が `display_name=None` を返すケースの正規化 |
 | `test_fetch_api.py::test_parent_account_filter_passed_to_billing_api` | `master_billing_account` フィルタが正しい形式で渡される |
 
 ### alert
@@ -164,6 +168,8 @@ ______________________________________________________________________
 | `test_results_posted_to_slack_with_formatted_text` | 通常通知の整形 |
 | `test_truncates_when_exceeds_max_rows` | MAX_ROWS 超過時のトランケート + サフィックス |
 | `test_slack_api_error_raises` | Slack `ok=false` で例外 |
+| `test_slack_5xx_propagates_http_error` | Slack 5xx 応答時に HTTPError が伝播 |
+| `test_slack_non_json_body_raises_runtime_error` | Slack 200 OK だが非 JSON ボディの場合に RuntimeError に変換 |
 | `test_max_bytes_billed_is_set` | 課金事故防止の `maximum_bytes_billed` 設定 |
 
 ______________________________________________________________________

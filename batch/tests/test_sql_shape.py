@@ -51,6 +51,22 @@ def test_step4_5_merge_contains_all_branches(batch_module):
     assert "SUB_CLOSED" in sql
 
 
+def test_unlinked_update_uses_strict_less_than(batch_module):
+    """初回実行時に全レコードが UNLINKED 化されないことを保証する。
+
+    MERGE 直後、出現したレコードは last_fetched_at = @batch_run_at に更新済み。
+    UNLINKED 化条件が `<` であれば初回実行時は誰もヒットしない（全件 INSERT で = になるため）。
+    `<=` だと初回でも全件 UNLINKED になるリグレッションを防ぐ。
+    """
+    bq = MagicMock()
+    batch_module._step4_5_merge_unlinked(
+        bq, batch_run_at=datetime(2026, 5, 25, tzinfo=timezone.utc), run_id="x"
+    )
+    sql = _capture_query_sql(bq)[0]
+    assert "last_fetched_at < @batch_run_at" in sql
+    assert "last_fetched_at <= @batch_run_at" not in sql
+
+
 def test_step4_5_passes_batch_run_at_param(batch_module):
     bq = MagicMock()
     run_at = datetime(2026, 5, 25, 12, 0, tzinfo=timezone.utc)
@@ -103,3 +119,49 @@ def test_step6_7_skipped_when_export_table_missing(batch_module, monkeypatch):
         bq, batch_run_at=datetime(2026, 5, 25, tzinfo=timezone.utc), run_id="x"
     )
     bq.query.assert_not_called()
+
+
+def test_monthly_multi_currency_logs_warning_and_continues(batch_module, caplog):
+    """複数通貨を持つプロジェクトが検出されても処理を継続し、warning を残す。"""
+    import logging as py_logging
+
+    bq = MagicMock()
+    # 1件は単一通貨、もう1件は複数通貨
+    bq.query.return_value.result.return_value = iter([
+        {"project_id": "p1", "sub_account_id": "s1", "prev_month_cost": 100.0,
+         "cost_currency": "USD", "currency_count": 1},
+        {"project_id": "p2", "sub_account_id": "s2", "prev_month_cost": 200.0,
+         "cost_currency": "JPY", "currency_count": 2},
+    ])
+
+    with caplog.at_level(py_logging.WARNING):
+        batch_module._step_monthly_cost(
+            bq, batch_run_at=datetime(2026, 5, 1, tzinfo=timezone.utc), run_id="x"
+        )
+
+    # warning が出ていること
+    warnings = [r for r in caplog.records if r.levelno == py_logging.WARNING]
+    assert any("multiple currencies" in r.message for r in warnings)
+
+    # 処理は継続（agg SELECT + MERGE で計 2 回 query 実行）
+    assert bq.query.call_count == 2
+
+
+def test_monthly_no_warning_when_all_single_currency(batch_module, caplog):
+    """全て単一通貨なら warning を出さない（誤検知防止）。"""
+    import logging as py_logging
+
+    bq = MagicMock()
+    bq.query.return_value.result.return_value = iter([
+        {"project_id": "p1", "sub_account_id": "s1", "prev_month_cost": 100.0,
+         "cost_currency": "USD", "currency_count": 1},
+    ])
+
+    with caplog.at_level(py_logging.WARNING):
+        batch_module._step_monthly_cost(
+            bq, batch_run_at=datetime(2026, 5, 1, tzinfo=timezone.utc), run_id="x"
+        )
+
+    warnings = [r for r in caplog.records
+                if r.levelno == py_logging.WARNING and "multiple currencies" in r.message]
+    assert warnings == []

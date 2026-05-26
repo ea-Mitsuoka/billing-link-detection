@@ -53,6 +53,15 @@ flowchart TD
     Rerun --> Verify[BigQuery で last_fetched_at が<br/>更新されたか確認]
 ```
 
+> **`BILLING_EXPORT_TABLE` 未設定時の挙動（日次 vs 月次の非対称）**
+>
+> | バッチ | 挙動 | 理由 |
+> |---|---|---|
+> | 日次 `billing-collector` | `step6_7`（ever_billed 更新）を warning ログでスキップして正常終了 | リンク情報の収集だけは継続したい。Billing Export 設定前でも日次は動作可 |
+> | 月次 `billing-cost-updater` | `ValueError` で即失敗 | 月次の主目的は前月コスト集計のため、Billing Export なしでは存在意義がない |
+>
+> Billing Export 設定前（初回構築中）は月次バッチがエラーになるのが正常。`BILLING_EXPORT_TABLE` を設定すれば解消する。
+
 ______________________________________________________________________
 
 ## 日常運用タスク

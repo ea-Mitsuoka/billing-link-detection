@@ -134,6 +134,40 @@ def test_slack_api_error_raises(alert_module):
             alert_module.alert_handler(req)
 
 
+def test_slack_5xx_propagates_http_error(alert_module):
+    """Slack が 5xx を返したら HTTPError が伝播する（raise_for_status 経由）。"""
+    import requests as req_module
+
+    bad = MagicMock()
+    bad.raise_for_status.side_effect = req_module.HTTPError("503 Service Unavailable")
+
+    with patch.object(alert_module.bigquery, "Client") as bq_cls, \
+         patch.object(alert_module.requests, "post", return_value=bad):
+        bq_cls.return_value.query.return_value.result.return_value = iter(
+            [{"project_id": "p1"}]
+        )
+        req = _mk_request("SELECT 1", "#ch", "m")
+        with pytest.raises(req_module.HTTPError, match="503"):
+            alert_module.alert_handler(req)
+
+
+def test_slack_non_json_body_raises_runtime_error(alert_module):
+    """Slack が 200 OK で非 JSON ボディを返した場合は RuntimeError に変換される。"""
+    bad = MagicMock()
+    bad.raise_for_status.return_value = None
+    bad.json.side_effect = ValueError("Expecting value: line 1 column 1 (char 0)")
+    bad.status_code = 200
+
+    with patch.object(alert_module.bigquery, "Client") as bq_cls, \
+         patch.object(alert_module.requests, "post", return_value=bad):
+        bq_cls.return_value.query.return_value.result.return_value = iter(
+            [{"project_id": "p1"}]
+        )
+        req = _mk_request("SELECT 1", "#ch", "m")
+        with pytest.raises(RuntimeError, match="non-JSON response"):
+            alert_module.alert_handler(req)
+
+
 def test_max_bytes_billed_is_set(alert_module):
     """課金事故防止のため maximum_bytes_billed が QueryJobConfig に設定される。"""
     with patch.object(alert_module.bigquery, "Client") as bq_cls:

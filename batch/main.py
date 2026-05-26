@@ -210,6 +210,10 @@ WHEN NOT MATCHED THEN INSERT (
   FALSE, NULL, FALSE
 );
 
+-- API 結果に含まれなかった既存レコードを UNLINKED 化する。
+-- MERGE 直後なので、今回出現したレコードは last_fetched_at = @batch_run_at に更新済み。
+-- これより古い last_fetched_at を持つレコードのみ UNLINKED 対象。
+-- 初回実行時は全件 INSERT で last_fetched_at = @batch_run_at になるため、ここでは何もヒットしない（意図通り）。
 UPDATE `{PROJECT_ID}.{BQ_DATASET}.billing_project_links`
 SET
   status      = 'UNLINKED',

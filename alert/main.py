@@ -58,6 +58,7 @@ def alert_handler(request):
 
     # HTTP 4xx/5xx → raise_for_status() で例外化
     # HTTP 200 でも body["ok"] が false の場合は Slack 側エラー（無効トークン等）
+    # 200 OK だが非 JSON ボディ（Slack 障害時の HTML 等）は JSONDecodeError を RuntimeError に変換
     response = requests.post(
         "https://slack.com/api/chat.postMessage",
         headers={"Authorization": f"Bearer {os.environ['SLACK_BOT_TOKEN']}"},
@@ -65,7 +66,12 @@ def alert_handler(request):
         timeout=10,
     )
     response.raise_for_status()
-    body = response.json()
+    try:
+        body = response.json()
+    except ValueError as e:
+        raise RuntimeError(
+            f"Slack returned non-JSON response (status={response.status_code}, channel={channel}, run_id={run_id}): {e}"
+        )
     if not body.get("ok"):
         raise RuntimeError(
             f"Slack API error: {body.get('error')} (channel={channel}, run_id={run_id})"

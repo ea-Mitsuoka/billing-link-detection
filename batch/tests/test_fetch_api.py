@@ -53,6 +53,22 @@ def test_records_have_expected_shape(batch_module):
     assert r2["sub_account_open"] is False
 
 
+def test_display_name_none_is_normalized_to_none(batch_module):
+    """Billing API が display_name=None を返すケース（空文字とは別）でも None に正規化される。"""
+    sub = _mk_sub_account("billingAccounts/AAAAAA-BBBBBB-CCCCCC", None, True)
+
+    fake_client = MagicMock()
+    fake_client.list_billing_accounts.return_value = [sub]
+    fake_client.list_project_billing_info.return_value = [_mk_proj("proj-a", True)]
+
+    with patch.object(
+        batch_module.billing_v1, "CloudBillingClient", return_value=fake_client
+    ):
+        records = batch_module._step2_fetch_api(run_id="x")
+
+    assert records[0]["sub_account_name"] is None
+
+
 def test_parent_account_filter_passed_to_billing_api(batch_module):
     fake_client = MagicMock()
     fake_client.list_billing_accounts.return_value = []
