@@ -58,7 +58,7 @@ flowchart TB
 
 **読み方のポイント**
 
-- **データの真実** は GCP の Billing API（リンク情報）と Billing Export（請求金額）の 2 つに分かれている
+- **データの真実** は GCP の Billing API（リンク情報）と Billing Export（請求金額）の 2 つに分かれている。Billing API は課金金額を返せないため、コスト集計には Billing Export の BigQuery 出力が必須（詳細は [decisions.md §12](./decisions.md)）
 - 日次バッチ `billing-collector` がこの 2 つを統合して `billing_project_links` テーブルを最新化する
 - 月次バッチ `billing-cost-updater` は前月の請求金額だけを更新する（リンク情報には触らない）
 - アラートは Cloud Functions が `billing_project_links` をクエリして Slack に投げるだけのシンプルな設計

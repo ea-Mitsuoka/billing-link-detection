@@ -1,5 +1,20 @@
 # データソース調査結果
 
+## 0. なぜ2つのデータソースが必要か
+
+このシステムは **Cloud Billing API** と **Cloud Billing Export（BigQuery）** の2つを併用する。それぞれが提供できる情報が異なるためであり、どちらか一方だけでは要件を満たせない。
+
+| データソース | 提供できる情報 | 提供できない情報 |
+|---|---|---|
+| **Cloud Billing API** | サブアカウント一覧、各プロジェクトのリンク状態（billing_enabled / open）、アカウント階層 | **コスト金額**（課金額の集計 API は存在しない） |
+| **Cloud Billing Export（BigQuery）** | プロジェクト・サービス単位の課金金額、過去の請求履歴 | リンク状態（billing_enabled の現在値）、サブアカウント階層 |
+
+**Cloud Billing API 単体では課金金額を取得できない**（[requirements.md §9-4](./requirements.md) 参照）。課金額の取得には Billing Export を BigQuery に出力し、SQL で集計するしかない。逆に、リンク状態やアカウント階層はエクスポートデータに含まれないため Billing API が必要。
+
+この制約がシステム全体の「2データソース構成」の根本的な理由であり、`billing_project_links` テーブルも2つのソースから別々に書き込む設計になっている（[architecture.md](./architecture.md) 参照）。
+
+______________________________________________________________________
+
 ## 1. カラムとデータソースの対応
 
 `billing_project_links` テーブルの各カラムは、以下の2つのデータソースから取得する。

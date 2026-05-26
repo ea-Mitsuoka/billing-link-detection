@@ -19,6 +19,7 @@ ______________________________________________________________________
 | 9 | Slack 通知方式 | Bot Token + `chat.postMessage` API | Incoming Webhook |
 | 10 | 月次バッチの実装方式 | 単一コンテナ（`BATCH_TYPE` 環境変数で分岐） | 日次・月次で別コンテナ（Dockerfile 分割） |
 | 11 | Billing Export の格納先プロジェクト | 分析システムとは別の専用プロジェクト（2プロジェクト構成） | 分析システムプロジェクトに同居 |
+| 12 | コストデータの取得手段 | Billing Export（BigQuery）を SQL で集計 | Billing API 単体で完結させる |
 
 ______________________________________________________________________
 
@@ -281,3 +282,37 @@ ______________________________________________________________________
 - Terraform SA も Export 専用プロジェクトに `roles/bigquery.admin` が必要（`billing_project_links` テーブルの IAM 設定のため）
 
 詳細構成図は [architecture.md §7](./architecture.md#7-%E3%83%97%E3%83%AD%E3%82%B8%E3%82%A7%E3%82%AF%E3%83%88%E5%88%86%E9%9B%A22-%E3%83%97%E3%83%AD%E3%82%B8%E3%82%A7%E3%82%AF%E3%83%88%E6%A7%8B%E6%88%90) を参照。
+
+______________________________________________________________________
+
+## 12. コストデータの取得手段
+
+**採用**: Billing Export（BigQuery）を SQL で集計\
+**却下**: Billing API 単体で完結させる
+
+**採用理由（Billing Export）**
+
+**Cloud Billing API は課金金額を返す API を提供していない**。`list_billing_accounts` / `list_project_billing_info` で取得できるのはアカウント構造（リンク状態・billing_enabled など）のみであり、「先月いくら課金されたか」を直接問い合わせる手段がない。
+
+Cloud Billing Budget API（`budgets.googleapis.com`）は予算と実績の比較に特化しており、任意期間・任意粒度でのコスト集計には使えない。
+
+そのため、課金額を取得するには **Billing Export を BigQuery に出力し、BigQuery SQL で集計する** しか選択肢がない。
+
+**データソースの使い分け**
+
+| 用途 | 使うデータソース | 理由 |
+|---|---|---|
+| リンク状態（billing_enabled / UNLINKED 検知） | Billing API | 現在のリンク状態はリアルタイムで API から取得する。Export には含まれない |
+| 課金金額（prev_month_cost / ever_billed） | Billing Export（BigQuery） | API に課金集計機能がない |
+| サブスクリプション課金（project 非紐付き） | Billing Export（BigQuery） | Gemini Enterprise 等は project.id=NULL で Export に現れる。API には出てこない |
+
+**却下理由（Billing API 単体）**
+
+- 技術的に不可能。API が課金額を返すエンドポイントを持たない
+
+**アーキテクチャ上の帰結**
+
+- Billing Export の有効化は必須。未設定のまま運用すると月次バッチの主目的（コスト更新）が果たせない
+- 日次バッチは Billing Export なしでも「リンク情報の収集」だけは継続できる設計（`BILLING_EXPORT_TABLE` 未設定時は Step 6–7 をスキップ）
+
+詳細は [data_source_investigation.md §0](./data_source_investigation.md) および [requirements.md §9-4](./requirements.md) を参照。
