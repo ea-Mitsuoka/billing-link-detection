@@ -372,6 +372,7 @@ ______________________________________________________________________
 | `zero_cost_projects` | 毎回通知（毎月6日） | 月次で状況を確認する定例チェック |
 | `never_billed_projects` | 毎回通知（毎月1日） | 月次で未課金プロジェクトを一覧確認する定例チェック |
 | `cost_surge_projects` | 毎回通知（毎月7日） | 前月vs前々月の30%超増加を月次で検知。閾値を超えている間は毎月通知される |
+| `subscription_cost_surge` | 毎回通知（毎月7日） | Gemini Enterprise / Looker Studio Pro 等のサブスクリプション課金（project.id が NULL の行）の前月比30%超増加を月次で検知 |
 
 `ever_billed = FALSE` のプロジェクト一覧（`never_billed_projects`）は、前月と同じプロジェクトが繰り返し通知される。これは**意図的な設計**であり、毎月の棚卸し確認として機能させる。「うるさい」場合は `gcloud scheduler jobs pause` で一時停止するか、alerts.yaml の `enabled: false` で無効化する。
 
@@ -552,4 +553,4 @@ data "google_monitoring_notification_channel" "slack" {
 | Cloud Functions 実行 | $0 | 無料枠200万回/月に対して数十〜数百回 |
 | Cloud Scheduler | $0〜 | 3ジョブまで無料。超過分は$0.10/job/月 |
 | BigQuery クエリ | $0 | 無料枠1TB/月に対してスキャン量が無視できる規模 |
-| **合計（アラート4件の場合）** | **$0〜$0.30/月** | データ収集2ジョブ（日次・月次）+ アラート4ジョブ = 計6ジョブ。超過3ジョブ×$0.10 |
+| **合計（アラート5件の場合）** | **$0〜$0.40/月** | データ収集2ジョブ（日次・月次）+ アラート5ジョブ = 計7ジョブ。超過4ジョブ×$0.10 |

@@ -97,3 +97,51 @@ alerts:
     channel: "#cs-alerts"           # 要変更：CS向けチャンネル
     message: "前月の請求金額が前々月より30%以上増加したプロジェクトが検出されました"
     enabled: true
+
+  - name: subscription_cost_surge
+    description: |
+      プロジェクトに紐づかないサブスクリプション課金（Gemini Enterprise / Looker Studio Pro 等）の
+      前月コストが前々月より30%以上増加した場合に通知（月次確認）。
+      Billing Export の project.id が NULL / 空文字の行を対象とする。
+      閾値を変更する場合は query 内の `* 1.30` を修正する（例: 50%増 → `* 1.50`）。
+    schedule: "0 9 7 * *"           # 毎月7日 09:00 JST（月次バッチが5日完了後、Export確定に余裕を持たせて7日）
+    query: |
+      WITH
+        monthly AS (
+          SELECT
+            billing_account_id          AS billing_account_id,
+            service.description         AS service_name,
+            invoice.month               AS yyyymm,
+            SUM(cost)                   AS total_cost
+          FROM `{billing_export_project}.{billing_export_dataset}.{billing_export_table}`
+          WHERE invoice.month IN (
+            FORMAT_DATE('%Y%m', DATE_SUB(DATE_TRUNC(CURRENT_DATE('Asia/Tokyo'), MONTH), INTERVAL 1 MONTH)),
+            FORMAT_DATE('%Y%m', DATE_SUB(DATE_TRUNC(CURRENT_DATE('Asia/Tokyo'), MONTH), INTERVAL 2 MONTH))
+          )
+            AND (project.id IS NULL OR project.id = '')  -- プロジェクト非紐付きのサブスクリプション課金のみ
+          GROUP BY billing_account_id, service.description, invoice.month
+        ),
+        prev AS (
+          SELECT billing_account_id, service_name, total_cost
+          FROM monthly
+          WHERE yyyymm = FORMAT_DATE('%Y%m', DATE_SUB(DATE_TRUNC(CURRENT_DATE('Asia/Tokyo'), MONTH), INTERVAL 1 MONTH))
+        ),
+        prev2 AS (
+          SELECT billing_account_id, service_name, total_cost
+          FROM monthly
+          WHERE yyyymm = FORMAT_DATE('%Y%m', DATE_SUB(DATE_TRUNC(CURRENT_DATE('Asia/Tokyo'), MONTH), INTERVAL 2 MONTH))
+        )
+      SELECT
+        prev.billing_account_id,
+        prev.service_name,
+        ROUND(prev2.total_cost, 2)                                               AS two_months_ago_cost,
+        ROUND(prev.total_cost,  2)                                               AS last_month_cost,
+        ROUND((prev.total_cost - prev2.total_cost) / prev2.total_cost * 100, 1) AS increase_pct
+      FROM prev
+      JOIN prev2 USING (billing_account_id, service_name)
+      WHERE prev2.total_cost > 0             -- ゼロ除算を回避（前々月に課金実績がある場合のみ比較）
+        AND prev.total_cost > prev2.total_cost * 1.30  -- 閾値: 30%増加。変更する場合はここを修正
+      ORDER BY increase_pct DESC
+    channel: "#cs-alerts"           # 要変更：CS向けチャンネル
+    message: "プロジェクト非紐付きのサブスクリプション課金（Gemini Enterprise / Looker Studio Pro 等）が前月比30%以上増加しました"
+    enabled: true
