@@ -120,16 +120,13 @@ ______________________________________________________________________
 
 ## Step 4: Cloud Monitoring の Slack 通知チャンネル設定（GUI のみ）
 
-Terraform では Slack 通知チャンネルの作成に対応していないため手動設定が必要。
+Terraform では作成不可（GCP Monitoring 独自の Slack OAuth フローが必要なため）。
 
 - [ ] GCP コンソール → Monitoring → Alerting → Notification Channels を開く
 - [ ] 「ADD NEW」→「Slack」→ Slack ワークスペースで認可する
 - [ ] 通知先チャンネル（`terraform.tfvars` の `monitoring_slack_channel` に設定した値）を選択する
 - [ ] 表示名を保存する（例: `Slack - alerts-gcp-billing`）
-- [ ] 表示名を `terraform/terraform.tfvars` に設定する
-  ```hcl
-  monitoring_channel_display_name = "Slack - alerts-gcp-billing"
-  ```
+- [ ] GitHub Variables の `MONITORING_CHANNEL_DISPLAY_NAME` に表示名を設定して CI/CD を再実行する
 
 ______________________________________________________________________
 
@@ -150,16 +147,19 @@ ______________________________________________________________________
 ## Step 6: Billing API 権限付与
 
 `sa-billing-collector` が親請求先アカウントの情報を読み取るための権限。
-**これは GCP 組織管理者の権限が必要なため、プロジェクト管理者では設定できない場合がある。**
+**請求先アカウント管理者または GCP 組織管理者の権限が必要。**
 
-- [ ] `terraform output billing_collector_sa_email` で SA のメールアドレスを確認する
 - [ ] dragon.jp 親請求先アカウントに `roles/billing.viewer` を付与する
   ```bash
   gcloud billing accounts add-iam-policy-binding <PARENT_BILLING_ACCOUNT_ID> \
-    --member="serviceAccount:sa-billing-collector@${GCP_PROJECT_ID}.iam.gserviceaccount.com" \
+    --member="serviceAccount:sa-billing-collector@ea-yukihidemitsuoka2.iam.gserviceaccount.com" \
     --role="roles/billing.viewer"
   ```
-  または GCP コンソール → 請求先アカウント → アカウント管理 → 権限 → 追加
+- [ ] 付与後に確認する
+  ```bash
+  gcloud billing accounts get-iam-policy <PARENT_BILLING_ACCOUNT_ID> \
+    --filter="bindings.members:sa-billing-collector@ea-yukihidemitsuoka2.iam.gserviceaccount.com"
+  ```
 
 ______________________________________________________________________
 

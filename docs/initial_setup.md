@@ -273,27 +273,44 @@ ______________________________________________________________________
 
 ### 4-1. 親請求先アカウントへのアクセス権限付与
 
-データ収集バッチのSA（Terraformが作成）に、親請求先アカウントの閲覧権限を付与する。\
-**これはGCP組織管理者が行う作業であり、プロジェクト管理者では設定できない場合がある。**
+データ収集バッチの SA（Terraform が作成）に、親請求先アカウントの閲覧権限を付与する。\
+**請求先アカウント管理者または GCP 組織管理者の権限が必要。**
 
 ```bash
-# Terraformが出力するSAのメールアドレスを確認
-terraform output billing_collector_sa_email
-
 # 親請求先アカウントに Billing Account Viewer を付与
 gcloud billing accounts add-iam-policy-binding PARENT_BILLING_ACCOUNT_ID \
   --member="serviceAccount:sa-billing-collector@PROJECT_ID.iam.gserviceaccount.com" \
   --role="roles/billing.viewer"
+
+# 付与後の確認
+gcloud billing accounts get-iam-policy PARENT_BILLING_ACCOUNT_ID \
+  --filter="bindings.members:sa-billing-collector@PROJECT_ID.iam.gserviceaccount.com"
 ```
+
+> SA のメールアドレスは `terraform output billing_collector_sa_email` でも確認できる。
 
 ### 4-2. Cloud Monitoring の Slack 通知チャンネル作成（手動）
 
-Cloud Monitoring から Slack に通知するには、別途 **Google Cloud Monitoring の Slack App** をワークスペースにインストールする必要がある（API では提供されないため手動セットアップ必須）。
+> **⚠️ 3-2 で作成した Slack App とは別物**
+>
+> | | 3-2 で作成した App | ここで使う App |
+> |---|---|---|
+> | 何か | 自分で作成したカスタム App | Google 公式の「Google Cloud Monitoring」App |
+> | トークン | `xoxb-...`（Bot Token）を手動取得 | OAuth で GCP が自動管理（不要） |
+> | 通知経路 | Cloud Functions → Slack API | Cloud Monitoring → Slack |
+> | 用途 | ビジネスアラート（課金開始検知等） | システムエラー通知（バッチ失敗等） |
+>
+> この手順では Google 公式 App をワークスペースに認可するだけでよい。
+
+Cloud Monitoring から Slack に通知するには、**Google Cloud Monitoring の Slack App** をワークスペースにインストールする必要がある。
+
+> **Terraform 化できない理由**: GCP Monitoring の Slack 連携は独自の OAuth フロー（GCP が管理する Slack App の認可）を使用しており、通常の Bot Token とは異なる。Terraform リソース（`google_monitoring_notification_channel`）で作成するには Slack OAuth トークンの手動取得が必要で、GUI 経由の方が現実的。
 
 1. GCP コンソール → Monitoring → Alerting → Notification Channels
 1. 「ADD NEW」→ Slack → Slack ワークスペースで認可
 1. 通知先チャンネル（`monitoring_slack_channel` で指定したもの。例: `#alerts-gcp-billing`）を選択
 1. 表示名を保存（例: `Slack - alerts-gcp-billing`）→ この名前を Terraform の `data "google_monitoring_notification_channel"` で参照する
+1. GitHub Variables の `MONITORING_CHANNEL_DISPLAY_NAME` に表示名を設定して CI/CD を再実行する
 
 詳細は `alert_design.md` Section 9「Slack 通知チャンネルの設定」を参照。
 
