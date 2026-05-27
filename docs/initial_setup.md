@@ -106,6 +106,17 @@ for ROLE in \
 done
 ```
 
+> **`actAs` 権限について**: Terraform SA には上記ロールに加えて、デプロイ対象リソースが使用する各 SA への `iam.serviceaccounts.actAs` が必要。これは Terraform の `google_service_account_iam_member` リソースとして `main.tf` で管理されており、手動付与は不要。ただし、対象 SA が存在しない・削除された場合は `terraform apply` 自体が失敗する点に注意。
+>
+> 必要な `actAs` 対象 SA（`main.tf` の `terraform_acts_as_*` リソースで管理）：
+>
+> | SA | 用途 |
+> |---|---|
+> | `sa-billing-collector` | Cloud Run Job の runtime SA |
+> | `sa-alert-handler` | Cloud Functions Gen2 の runtime SA |
+> | `{PROJECT_NUMBER}-compute@developer.gserviceaccount.com` | Cloud Functions Gen2 ビルド時に Cloud Build が使用する Compute Engine デフォルト SA |
+> | `sa-scheduler` | Cloud Scheduler ジョブの OIDC トークン SA |
+
 ### 2-4. Terraform backend設定
 
 `terraform/backend.tf` に以下を記載する（`terraform init` 前に必要）。
@@ -171,7 +182,6 @@ gcloud iam service-accounts add-iam-policy-binding ${SA_EMAIL} \
 | `GCP_PROJECT_ID` | `your-project-id` | 分析システム側のプロジェクト ID。Terraform / Docker 認証先 |
 | `BILLING_EXPORT_PROJECT_ID` | `billing-export-project-id` | Billing Export 専用プロジェクト ID。**構成 A（単一プロジェクト）の場合は空文字** |
 | `BILLING_EXPORT_DATASET` | `billing_data` | Billing Export のデータセット名（terraform.tfvars と同じ値） |
-| `BILLING_EXPORT_TABLE` | `gcp_billing_export_v1_XXXXXX` | Billing Export のテーブル名 |
 | `MONITORING_SLACK_CHANNEL` | `#alerts-gcp-billing` | Cloud Monitoring のシステムエラー通知先 |
 | `MONITORING_CHANNEL_DISPLAY_NAME` | `Slack - alerts-gcp-billing` | Phase 4-2 で手動作成した Notification Channel の display_name。**初回 apply 時は空文字でも可（アラートポリシーは notification なしで作られる）** |
 
@@ -180,10 +190,12 @@ gcloud iam service-accounts add-iam-policy-binding ${SA_EMAIL} \
 | 名前 | 値の例 | 用途 |
 |---|---|---|
 | `PARENT_BILLING_ACCOUNT` | `XXXXXX-YYYYYY-ZZZZZZ` | 親請求先アカウントID |
+| `BILLING_EXPORT_TABLE` | `gcp_billing_export_v1_XXXXXX` | Billing Export のテーブル名。**テーブル名に親請求先アカウントIDが含まれるため Secret で管理** |
 | `WIF_PROVIDER` | `projects/PROJECT_NUMBER/locations/global/workloadIdentityPools/github-pool/providers/github-provider` | 2-5 で作成した WIF Provider のフルパス |
 | `TERRAFORM_SA_EMAIL` | `sa-terraform@PROJECT_ID.iam.gserviceaccount.com` | 2-2 で作成した Terraform 実行用 SA |
 
-> GitHub Variables と Secrets の使い分け：Slack チャンネル名・データセット名などはログ・PR コメントに表示されても問題ないので Variables、親請求先アカウントIDや WIF Provider パスのように漏洩リスクがあるものは Secrets を使う。
+> GitHub Variables と Secrets の使い分け：Slack チャンネル名・データセット名などはログ・PR コメントに表示されても問題ないので Variables、親請求先アカウントIDや WIF Provider パスのように漏洩リスクがあるものは Secrets を使う。\
+> `BILLING_EXPORT_TABLE` のテーブル名は `gcp_billing_export_v1_XXXXXX-YYYYYY-ZZZZZZ` 形式で親請求先アカウントIDが埋め込まれるため、同様に Secret で管理する。
 
 ______________________________________________________________________
 
