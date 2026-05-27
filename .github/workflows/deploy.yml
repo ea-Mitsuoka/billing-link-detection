@@ -11,7 +11,7 @@ env:
   TF_VAR_region:                          asia-northeast1
   TF_VAR_parent_billing_account:          ${{ secrets.PARENT_BILLING_ACCOUNT }}
   TF_VAR_billing_export_dataset:          ${{ vars.BILLING_EXPORT_DATASET }}
-  TF_VAR_billing_export_table:            ${{ vars.BILLING_EXPORT_TABLE }}
+  TF_VAR_billing_export_table:            ${{ secrets.BILLING_EXPORT_TABLE }}
   TF_VAR_billing_export_project_id:       ${{ vars.BILLING_EXPORT_PROJECT_ID }}
   TF_VAR_monitoring_slack_channel:        ${{ vars.MONITORING_SLACK_CHANNEL }}
   TF_VAR_monitoring_channel_display_name: ${{ vars.MONITORING_CHANNEL_DISPLAY_NAME }}
