@@ -230,6 +230,20 @@ resource "google_service_account_iam_member" "terraform_acts_as_alert_handler" {
   member             = "serviceAccount:${var.terraform_sa_email}"
 }
 
+# Cloud Functions Gen2 はビルド時に Cloud Build を使用する。
+# Cloud Build は Compute Engine デフォルト SA として動作するため、
+# Terraform SA にはこの SA への actAs 権限も必要。
+data "google_project" "project" {
+  project_id = var.project_id
+}
+
+resource "google_service_account_iam_member" "terraform_acts_as_compute_default" {
+  count              = var.terraform_sa_email != "" ? 1 : 0
+  service_account_id = "projects/${var.project_id}/serviceAccounts/${data.google_project.project.number}-compute@developer.gserviceaccount.com"
+  role               = "roles/iam.serviceAccountUser"
+  member             = "serviceAccount:${var.terraform_sa_email}"
+}
+
 # GCP IAM の伝播遅延を吸収するための待機
 # actAs 権限付与直後に Cloud Run / Cloud Functions を更新すると 403 になるため
 # triggers により IAM バインディングが変わるたびに time_sleep が再作成され、常に待機が走る
@@ -238,11 +252,13 @@ resource "time_sleep" "iam_propagation" {
   depends_on = [
     google_service_account_iam_member.terraform_acts_as_collector,
     google_service_account_iam_member.terraform_acts_as_alert_handler,
+    google_service_account_iam_member.terraform_acts_as_compute_default,
   ]
   create_duration = "120s"
   triggers = {
-    collector_iam = var.terraform_sa_email != "" ? google_service_account_iam_member.terraform_acts_as_collector[0].id : ""
-    alert_iam     = var.terraform_sa_email != "" ? google_service_account_iam_member.terraform_acts_as_alert_handler[0].id : ""
+    collector_iam        = var.terraform_sa_email != "" ? google_service_account_iam_member.terraform_acts_as_collector[0].id : ""
+    alert_iam            = var.terraform_sa_email != "" ? google_service_account_iam_member.terraform_acts_as_alert_handler[0].id : ""
+    compute_default_iam  = var.terraform_sa_email != "" ? google_service_account_iam_member.terraform_acts_as_compute_default[0].id : ""
   }
 }
 
