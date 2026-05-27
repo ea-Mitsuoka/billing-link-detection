@@ -256,9 +256,9 @@ resource "time_sleep" "iam_propagation" {
   ]
   create_duration = "120s"
   triggers = {
-    collector_iam        = var.terraform_sa_email != "" ? google_service_account_iam_member.terraform_acts_as_collector[0].id : ""
-    alert_iam            = var.terraform_sa_email != "" ? google_service_account_iam_member.terraform_acts_as_alert_handler[0].id : ""
-    compute_default_iam  = var.terraform_sa_email != "" ? google_service_account_iam_member.terraform_acts_as_compute_default[0].id : ""
+    collector_iam       = var.terraform_sa_email != "" ? google_service_account_iam_member.terraform_acts_as_collector[0].id : ""
+    alert_iam           = var.terraform_sa_email != "" ? google_service_account_iam_member.terraform_acts_as_alert_handler[0].id : ""
+    compute_default_iam = var.terraform_sa_email != "" ? google_service_account_iam_member.terraform_acts_as_compute_default[0].id : ""
   }
 }
 
