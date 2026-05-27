@@ -244,6 +244,14 @@ resource "google_service_account_iam_member" "terraform_acts_as_compute_default"
   member             = "serviceAccount:${var.terraform_sa_email}"
 }
 
+# Cloud Scheduler ジョブは oidc_token で sa-scheduler を指定するため actAs が必要
+resource "google_service_account_iam_member" "terraform_acts_as_scheduler" {
+  count              = var.terraform_sa_email != "" ? 1 : 0
+  service_account_id = google_service_account.scheduler.name
+  role               = "roles/iam.serviceAccountUser"
+  member             = "serviceAccount:${var.terraform_sa_email}"
+}
+
 # GCP IAM の伝播遅延を吸収するための待機
 # actAs 権限付与直後に Cloud Run / Cloud Functions を更新すると 403 になるため
 # triggers により IAM バインディングが変わるたびに time_sleep が再作成され、常に待機が走る
@@ -253,12 +261,14 @@ resource "time_sleep" "iam_propagation" {
     google_service_account_iam_member.terraform_acts_as_collector,
     google_service_account_iam_member.terraform_acts_as_alert_handler,
     google_service_account_iam_member.terraform_acts_as_compute_default,
+    google_service_account_iam_member.terraform_acts_as_scheduler,
   ]
   create_duration = "120s"
   triggers = {
     collector_iam       = var.terraform_sa_email != "" ? google_service_account_iam_member.terraform_acts_as_collector[0].id : ""
     alert_iam           = var.terraform_sa_email != "" ? google_service_account_iam_member.terraform_acts_as_alert_handler[0].id : ""
     compute_default_iam = var.terraform_sa_email != "" ? google_service_account_iam_member.terraform_acts_as_compute_default[0].id : ""
+    scheduler_iam       = var.terraform_sa_email != "" ? google_service_account_iam_member.terraform_acts_as_scheduler[0].id : ""
   }
 }
 
