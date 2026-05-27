@@ -159,22 +159,28 @@ ______________________________________________________________________
 ## 5. `billing_project_links.status` の状態遷移図
 
 ```mermaid
-stateDiagram-v2
-    [*] --> ACTIVE: 新規プロジェクト発見<br/>(WHEN NOT MATCHED)
-    ACTIVE --> BILLING_DISABLED: billing_enabled<br/>=FALSE
-    ACTIVE --> SUB_CLOSED: sub_account_open<br/>=FALSE
-    ACTIVE --> UNLINKED: 今回 API に<br/>出現せず
+flowchart LR
+    START(["初回発見\n→ INSERT"]) --> ACTIVE
 
-    BILLING_DISABLED --> ACTIVE: billing_enabled<br/>=TRUE 復帰
-    BILLING_DISABLED --> SUB_CLOSED: sub_account_open<br/>=FALSE
-    BILLING_DISABLED --> UNLINKED: 今回 API に<br/>出現せず
+    subgraph inAPI["API に出現している（バッチ毎に MERGE で再評価）"]
+        direction TB
+        ACTIVE["ACTIVE\n正常リンク中"]
+        BD["BILLING_DISABLED\n課金停止\nbilling_enabled = FALSE"]
+        SC["SUB_CLOSED\nアカウント閉鎖\nsub_account_open = FALSE"]
 
-    SUB_CLOSED --> ACTIVE: 再オープン&課金有効
-    SUB_CLOSED --> UNLINKED: 今回 API に<br/>出現せず
+        ACTIVE -->|"billing_enabled = FALSE"| BD
+        BD -->|"billing_enabled = TRUE に復帰"| ACTIVE
+        ACTIVE -->|"sub_account_open = FALSE"| SC
+        BD -->|"sub_account_open = FALSE"| SC
+        SC -->|"再オープン & 課金有効"| ACTIVE
+    end
 
-    UNLINKED --> ACTIVE: 再リンク<br/>(MERGE WHEN MATCHED<br/>AND status='UNLINKED')
-    UNLINKED --> BILLING_DISABLED: 再リンクかつ<br/>billing_enabled=FALSE
-    UNLINKED --> SUB_CLOSED: 再リンクかつ<br/>sub_account_open=FALSE
+    UL["UNLINKED\n今回バッチで\nAPI に出現せず"]
+
+    ACTIVE & BD & SC -->|"API 不出現"| UL
+    UL -->|"API 再出現 → MERGE 再評価"| ACTIVE
+    UL -.->|"再出現 &\nbilling_enabled=FALSE"| BD
+    UL -.->|"再出現 &\nsub_account_open=FALSE"| SC
 ```
 
 **遷移の判定ロジック**（MERGE 内 CASE 式）
