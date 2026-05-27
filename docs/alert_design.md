@@ -125,15 +125,13 @@ ______________________________________________________________________
 
 通知メッセージはシンプルな Slack Markdown テキストとする。Block Kit は採用しない（メンテナンスコストに対して可読性の向上が限定的なため）。
 
-```
+````
 *{message}*
 ```
-
 project_id: xxx | sub_account_name: yyy | ...
 project_id: zzz | sub_account_name: www | ...
-
 ```
-```
+````
 
 ### クエリのコスト保護
 
@@ -200,10 +198,9 @@ def alert_handler(request):
     )
     text = f"*{message}*\n```{rows_text}```{suffix}"
 
-    # Slack API の応答チェックは必須：
-    # - HTTP 4xx/5xx は raise_for_status() で例外化
-    # - HTTP 200 でも Slack 側エラー（無効トークン・チャンネル不在）の場合 body の "ok" が false になる
-    # 例外を上げると Cloud Functions Gen2 が ERROR ログを出力し Cloud Monitoring が検知する
+    # HTTP 4xx/5xx → raise_for_status() で例外化
+    # HTTP 200 でも body["ok"] が false の場合は Slack 側エラー（無効トークン等）
+    # 200 OK だが非 JSON ボディ（Slack 障害時の HTML 等）は JSONDecodeError を RuntimeError に変換
     response = requests.post(
         "https://slack.com/api/chat.postMessage",
         headers={"Authorization": f"Bearer {os.environ['SLACK_BOT_TOKEN']}"},
@@ -211,7 +208,12 @@ def alert_handler(request):
         timeout=10,
     )
     response.raise_for_status()
-    body = response.json()
+    try:
+        body = response.json()
+    except ValueError as e:
+        raise RuntimeError(
+            f"Slack returned non-JSON response (status={response.status_code}, channel={channel}, run_id={run_id}): {e}"
+        )
     if not body.get("ok"):
         raise RuntimeError(
             f"Slack API error: {body.get('error')} (channel={channel}, run_id={run_id})"
@@ -219,14 +221,12 @@ def alert_handler(request):
 
     logger.info(
         "notification sent",
-        extra={
-            "json_fields": {
-                "run_id": run_id,
-                "channel": channel,
-                "result_count": len(results),
-                "truncated": len(results) > MAX_ROWS,
-            }
-        },
+        extra={"json_fields": {
+            "run_id": run_id,
+            "channel": channel,
+            "result_count": len(results),
+            "truncated": len(results) > MAX_ROWS,
+        }},
     )
     return "ok", 200
 ````

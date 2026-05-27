@@ -228,7 +228,7 @@ ______________________________________________________________________
 | エクスポート種類 | 標準使用量のコスト |
 
 4. エクスポートテーブル名（`gcp_billing_export_v1_XXXXXX`）を控えておく\
-   → `terraform.tfvars` の `billing_export_table` と GitHub Variables の `BILLING_EXPORT_TABLE` に設定する
+   → `terraform.tfvars` の `billing_export_table` と GitHub Secrets の `BILLING_EXPORT_TABLE` に設定する
 
 1. 構成 B の場合: Billing Export 専用プロジェクト側で **Terraform 実行 SA（sa-terraform）に `roles/bigquery.admin` を付与** する（クロスプロジェクトのデータセット IAM 操作のため）
 
