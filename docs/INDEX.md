@@ -104,4 +104,4 @@ ______________________________________________________________________
 | バッチ失敗時の手動再実行コマンド | [operations.md](./operations.md) §バッチ手動再実行 |
 | アラート通知先（Slack チャンネル）の変更方法 | [alert_design.md](./alert_design.md) §3、[operations.md](./operations.md) §アラート変更 |
 | `terraform.tfvars` の各変数の意味 | [../terraform/variables.tf](../terraform/variables.tf) |
-| 月次バッチが前月の何日に実行されるか | [decisions.md](./decisions.md) §10、Cloud Scheduler 定義は [main.tf](../terraform/main.tf) |
+| 月次バッチが前月の何日に実行されるか | [requirements.md](./requirements.md) §4、Cloud Scheduler 定義は [main.tf](../terraform/main.tf) |

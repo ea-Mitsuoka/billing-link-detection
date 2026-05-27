@@ -362,12 +362,19 @@ billing-link-detection/
 │   └── workflows/
 │       └── deploy.yml              # CI/CD（GitHub Actions）
 ├── README.md                       # 開発者向けの最初の入口
-├── requirements.md                 # 要件定義
-├── alert_design.md                 # アラートシステム設計
-├── initial_setup.md                # 初回セットアップ手順（このファイル）
-├── decisions.md                    # 設計判断の記録
-├── merge_sql_prototype.md          # MERGE SQL プロトタイプ
-└── data_source_investigation.md    # Billing API / Export 調査結果
+└── docs/
+    ├── INDEX.md                    # ドキュメント逆引き
+    ├── requirements.md             # 要件定義
+    ├── architecture.md             # システム全体構成（図中心）
+    ├── alert_design.md             # アラートシステム設計
+    ├── initial_setup.md            # 初回セットアップ手順（このファイル）
+    ├── todo.md                     # 本番稼働までの TODO
+    ├── operations.md               # 運用ドキュメント
+    ├── decisions.md                # 設計判断の記録
+    ├── constraints_and_flexibility.md  # 外部制約と柔軟性整理
+    ├── glossary.md                 # 用語集
+    ├── merge_sql_prototype.md      # MERGE SQL プロトタイプ
+    └── data_source_investigation.md  # Billing API / Export 調査結果
 ```
 
 ______________________________________________________________________

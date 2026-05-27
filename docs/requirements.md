@@ -149,13 +149,13 @@ resource "google_cloud_scheduler_job" "billing_cost_updater_monthly" {
 本システムは非常に軽量なバッチ処理であるため、ほとんどが無料枠（Free Tier）に収まり、**月額費用はほぼ$0〜数ドル程度**となる見込み。
 
 - **Cloud Run Jobs**: 月に30回（毎日1回）+ 月1回、数分程度の実行。無料枠（毎月200万リクエスト、36万GB秒）内に完全におさまる。 **($0.00)**
-- **Cloud Scheduler**: データ収集2ジョブ（日次・月次） + アラート3ジョブ = 計5ジョブ。3ジョブまで無料、超過分は$0.10/job/月。超過2ジョブ分 **($0.00〜$0.20)**
+- **Cloud Scheduler**: データ収集2ジョブ（日次・月次） + アラート5ジョブ = 計7ジョブ。3ジョブまで無料、超過分は$0.10/job/月。超過4ジョブ分 **($0.00〜$0.40)**
 - **Cloud Functions**: アラートハンドラ。無料枠200万回/月に対して数十〜数百回の実行。 **($0.00)**
 - **BigQuery**: ストレージ（毎月10GB無料）、クエリ（毎月1TB無料）。データ量はKB〜MBクラスのため無料枠内。 **($0.00)**
 - **Cloud Logging / Monitoring**: 毎月50GBまで無料。メトリクスやアラートも標準機能の範囲内。 **($0.00)**
 - **Artifact Registry**: 毎月0.5GB無料。イメージサイズによるが、数十円〜数百円程度。 **($0.10 〜 $1.00)**
 - **CI/CD (GitHub Actions)**: パブリックリポジトリは無制限。プライベートでも無料枠2000分/月で十分。 **($0.00)**
-- **合計見積もり**: **$0.10 〜 $1.20 / 月**（Cloud Schedulerの超過ジョブ分含む）
+- **合計見積もり**: **$0.10 〜 $1.40 / 月**（Cloud Schedulerの超過ジョブ分含む）
 
 ## 6. データ定義（BigQuery テーブル仕様）
 
@@ -334,12 +334,13 @@ Cloud Monitoring が監視するのは**システムエラー（バッチ・Func
 
 ### 通知頻度
 
-Cloud Monitoring はインシデント単位で管理する。エラーログを検知するとインシデントが発生して通知し、条件がクリアされるとインシデントが解消して解消通知が届く。同一インシデント内での再通知間隔と、インシデントの自動クローズ時間を Terraform 変数として定義し、後から柔軟に変更できるようにする。
+Cloud Monitoring はインシデント単位で管理する。エラーログを検知するとインシデントが発生して通知し、条件がクリアされるとインシデントが解消して解消通知が届く。インシデントの自動クローズ時間を Terraform 変数として定義し、後から柔軟に変更できるようにする。
 
 | Terraform 変数 | 推奨初期値 | 意味 |
 |---|---|---|
-| `monitoring_notification_rate_limit` | `86400s`（24時間） | 同一インシデント内での最小再通知間隔。日次バッチの場合「1回の失敗につき1通知」が基本 |
 | `monitoring_auto_close` | `86400s`（24時間） | 条件がクリアされてからインシデントを自動クローズするまでの時間 |
+
+> `notification_rate_limit`（再通知間隔の制限）はログベースアラートポリシー専用オプションのため、本システムが使用するメトリクス閾値ベースのポリシーには設定しない（[`constraints_and_flexibility.md`](./constraints_and_flexibility.md) §2-3 参照）。
 
 ### 実装方式
 
@@ -478,7 +479,7 @@ resource "google_cloud_run_v2_job" "billing_cost_updater" {
       max_retries = 0
       timeout     = "600s"
       containers {
-        image = var.batch_image  # billing-collector と同一イメージ
+        image = local.batch_image_resolved  # billing-collector と同一イメージ（var.batch_image が空のとき python:3.12-slim にフォールバック）
         env {
           name  = "BATCH_TYPE"
           value = "monthly"
@@ -519,7 +520,7 @@ ______________________________________________________________________
 |---|---|---|
 | `sa-billing-collector` | Cloud Run Jobs（データ収集バッチ） | Billing Account Viewer（親アカウント）、BigQuery Data Editor（`billing_project_links`）、BigQuery Data Viewer（Billing Export テーブル）、BigQuery Job User（クエリ実行） |
 | `sa-alert-handler` | Cloud Functions（アラートハンドラ） | BigQuery Data Viewer（`billing_project_links`）、BigQuery Job User（クエリ実行）、Secret Manager Secret Accessor（Slack Bot Token） |
-| `sa-scheduler` | Cloud Scheduler | Cloud Run Invoker（データ収集ジョブ + アラートジョブの両方。Cloud Functions Gen2 は内部的に Cloud Run 上で動作するため、`roles/cloudfunctions.invoker` ではなく `roles/run.invoker` が必要） |
+| `sa-scheduler` | Cloud Scheduler | Cloud Run Invoker（`roles/run.invoker`、データ収集ジョブの起動用）、Cloud Functions Invoker（`roles/cloudfunctions.invoker`、アラートハンドラ起動用） |
 
 ### 認証情報の管理
 
@@ -544,7 +545,10 @@ ______________________________________________________________________
 | `scheduler_sa_email` | 動作確認・追加 IAM 付与時の参照 |
 | `batch_job_name` | Cloud Run Jobs の手動実行用 |
 | `bq_dataset_id` | BQ コンソールでのデータ確認用 |
-| `wif_provider` | GitHub Secrets 更新時の参照（再生成不要のため Secrets と Terraform を一致確認できる） |
+| `artifact_registry_repo` | Docker push 先の URI（CI/CD で参照） |
+| `alert_handler_url` | アラートハンドラの動作確認用 |
+
+> **WIF Provider のフルパス** は Terraform 管理外（`initial_setup.md` Phase 2-5 で手動作成）。GitHub Secrets の `WIF_PROVIDER` には手動セットアップ時に控えた値を設定する。
 
 ### プロバイダーバージョンの固定
 

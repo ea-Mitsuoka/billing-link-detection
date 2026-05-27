@@ -17,7 +17,7 @@ flowchart TB
     subgraph analysis["分析システムプロジェクト"]
         Sched1["Cloud Scheduler<br/>日次 02:00 JST"]
         Sched2["Cloud Scheduler<br/>月次 5日 03:00 JST"]
-        SchedAlert["Cloud Scheduler<br/>（アラート3種）"]
+        SchedAlert["Cloud Scheduler<br/>（アラート5種）"]
 
         JobDaily["Cloud Run Job<br/>billing-collector<br/>BATCH_TYPE=daily"]
         JobMonthly["Cloud Run Job<br/>billing-cost-updater<br/>BATCH_TYPE=monthly"]

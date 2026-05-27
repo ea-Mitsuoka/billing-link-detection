@@ -26,6 +26,8 @@ ______________________________________________________________________
 
 ## 3. alerts.yaml の定義形式
 
+> 以下は **書式説明用に 3 件抜粋した例**。実ファイル [`alert/alerts.yaml`](../alert/alerts.yaml) には 5 件（`billing_newly_started` / `zero_cost_projects` / `never_billed_projects` / `cost_surge_projects` / `subscription_cost_surge`）が定義されている。
+
 ```yaml
 # チャンネル名（channel フィールド）は仮置き。実際の Slack チャンネル名に変更すること。
 
@@ -286,12 +288,16 @@ resource "google_cloudfunctions2_function" "alert_handler" {
   }
 
   service_config {
-    timeout_seconds  = 120
-    available_memory = "256M"
+    timeout_seconds       = 120
+    available_memory      = "256M"
+    service_account_email = google_service_account.alert_handler.email
 
     environment_variables = {
-      GCP_PROJECT_ID = var.project_id
-      BQ_DATASET     = var.bq_dataset
+      GCP_PROJECT_ID            = var.project_id
+      BQ_DATASET                = var.bq_dataset
+      BILLING_EXPORT_PROJECT_ID = local.billing_export_project
+      BILLING_EXPORT_DATASET    = var.billing_export_dataset
+      BILLING_EXPORT_TABLE      = var.billing_export_table
     }
 
     secret_environment_variables {
@@ -301,6 +307,9 @@ resource "google_cloudfunctions2_function" "alert_handler" {
       version    = "latest"
     }
   }
+
+  # actAs IAM 伝播待ち（Cloud Build / Compute Engine default SA など）
+  depends_on = [time_sleep.iam_propagation]
 }
 
 # alerts.yaml のエントリ数だけ Cloud Scheduler ジョブを自動生成
@@ -320,7 +329,8 @@ resource "google_cloud_scheduler_job" "alerts" {
       message = each.value.message
     }))
     oidc_token {
-      service_account_email = google_service_account.alert_sa.email
+      service_account_email = google_service_account.scheduler.email
+      audience              = google_cloudfunctions2_function.alert_handler.url
     }
   }
 }
