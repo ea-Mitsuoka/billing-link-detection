@@ -113,7 +113,7 @@ flowchart TD
 | **Billing Export データ反映遅延（最大 24 時間）** | 月次バッチを 5 日実行にしている理由。4 日まで遅延しても 1 日のバッファ |
 | **Billing Export は設定以降のデータしか入らない** | 過去遡及不可。`ever_billed` / `first_billed_month` は **Export 開始日以降の真実しか語らない** |
 | **Cloud Monitoring の Slack 通知チャンネルは API で作れない** | Slack App インストール（GUI）が必須。[initial_setup §4-2](./initial_setup.md#4-2-cloud-monitoring-%E3%81%AE-slack-%E9%80%9A%E7%9F%A5%E3%83%81%E3%83%A3%E3%83%B3%E3%83%8D%E3%83%AB%E4%BD%9C%E6%88%90%E6%89%8B%E5%8B%95) |
-| **Cloud Functions Gen2 の IAM ロール = `roles/cloudfunctions.invoker`** | `roles/run.invoker` ではない（Gen2 でも） |
+| **Cloud Functions Gen2 の IAM ロール = `roles/run.invoker`（Cloud Run レベル）** | `roles/cloudfunctions.invoker` を Cloud Functions レベルに設定しても Cloud Run IAM には伝播しないため不十分。`google_cloud_run_v2_service_iam_member` で `roles/run.invoker` を付与すること |
 | **Cloud Monitoring metric-threshold ポリシーの filter は `resource.type` 必須** | log-based metric の場合、元ログの `resource.type`（`cloud_run_job` / `cloud_run_revision`）を指定する。`global` は不正 |
 | **Cloud Monitoring の `notification_rate_limit` は log-based ポリシーのみ** | metric-threshold（本システム使用）では `alert_strategy.auto_close` のみ |
 | **Cloud Billing API のレート制限とページネーション** | `list_billing_accounts` / `list_project_billing_info` は内部で iterator になっている。1000+ プロジェクトで遅延が出る可能性 |

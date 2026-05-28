@@ -467,12 +467,14 @@ resource "google_cloudfunctions2_function" "alert_handler" {
 # IAM — Cloud Functions（Scheduler が呼び出すための権限）
 # ===================================================================
 
-resource "google_cloudfunctions2_function_iam_member" "scheduler_invokes_alert" {
-  project        = var.project_id
-  location       = var.region
-  cloud_function = google_cloudfunctions2_function.alert_handler.name
-  role           = "roles/cloudfunctions.invoker"
-  member         = "serviceAccount:${google_service_account.scheduler.email}"
+# Cloud Functions Gen2 の実体は Cloud Run のため、Cloud Run レベルで run.invoker を付与する
+# cloudfunctions.invoker を Cloud Functions レベルに設定しても Cloud Run IAM には伝播しないため不十分
+resource "google_cloud_run_v2_service_iam_member" "scheduler_invokes_alert" {
+  project  = var.project_id
+  location = var.region
+  name     = google_cloudfunctions2_function.alert_handler.name
+  role     = "roles/run.invoker"
+  member   = "serviceAccount:${google_service_account.scheduler.email}"
 }
 
 # ===================================================================

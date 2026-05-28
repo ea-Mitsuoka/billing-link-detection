@@ -18,7 +18,7 @@ MAX_ROWS = 50
 @functions_framework.http
 def alert_handler(request):
     run_id  = str(uuid.uuid4())
-    payload = request.get_json()
+    payload = request.get_json(force=True)
     query   = payload["query"].format(
         project=os.environ["GCP_PROJECT_ID"],
         dataset=os.environ["BQ_DATASET"],

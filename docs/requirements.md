@@ -520,7 +520,7 @@ ______________________________________________________________________
 |---|---|---|
 | `sa-billing-collector` | Cloud Run Jobs（データ収集バッチ） | Billing Account Viewer（親アカウント）、BigQuery Data Editor（`billing_project_links`）、BigQuery Data Viewer（Billing Export テーブル）、BigQuery Job User（クエリ実行） |
 | `sa-alert-handler` | Cloud Functions（アラートハンドラ） | BigQuery Data Viewer（`billing_project_links`）、BigQuery Job User（クエリ実行）、Secret Manager Secret Accessor（Slack Bot Token） |
-| `sa-scheduler` | Cloud Scheduler | Cloud Run Invoker（`roles/run.invoker`、データ収集ジョブの起動用）、Cloud Functions Invoker（`roles/cloudfunctions.invoker`、アラートハンドラ起動用） |
+| `sa-scheduler` | Cloud Scheduler | `roles/run.invoker`（Cloud Run レベル）をデータ収集ジョブ・アラートハンドラ両方に付与。Cloud Functions Gen2 は Cloud Run として動作するため、`cloudfunctions.invoker` ではなく `run.invoker` が必要 |
 
 ### 認証情報の管理
 
