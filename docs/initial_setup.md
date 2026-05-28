@@ -171,6 +171,16 @@ gcloud iam service-accounts add-iam-policy-binding ${SA_EMAIL} \
 
 > WIF はキーファイルの発行・管理が不要なため、サービスアカウントキーの漏洩リスクを排除できる。設定は初回のみ手動で行い、以降は Terraform で管理可能。
 
+上記コマンドの実行後、`WIF_PROVIDER`（GitHub Secret）に設定するフルパスを取得する：
+
+```bash
+PROJECT_NUMBER=$(gcloud projects describe PROJECT_ID --format="value(projectNumber)")
+echo "projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/github-pool/providers/github-provider"
+```
+
+出力された値をそのまま次の §2-6 の `WIF_PROVIDER` Secret に設定する。\
+（GCP コンソールからも確認可能：「IAM と管理」→「Workload Identity 連携」→ `github-pool` → `github-provider` をクリックしてプロバイダ名をコピー）
+
 ### 2-6. GitHub Variables / Secrets の登録
 
 `.github/workflows/deploy.yml` から参照する値を GitHub リポジトリの Settings → Secrets and variables → Actions で登録する。
@@ -184,6 +194,7 @@ gcloud iam service-accounts add-iam-policy-binding ${SA_EMAIL} \
 | `BILLING_EXPORT_DATASET` | `billing_data` | Billing Export のデータセット名（terraform.tfvars と同じ値） |
 | `MONITORING_SLACK_CHANNEL` | `#alerts-gcp-billing` | Cloud Monitoring のシステムエラー通知先 |
 | `MONITORING_CHANNEL_DISPLAY_NAME` | `Slack - alerts-gcp-billing` | Phase 4-2 で手動作成した Notification Channel の display_name。**初回 apply 時は空文字でも可（アラートポリシーは notification なしで作られる）** |
+| `ALERT_CHANNEL_OVERRIDES` | `{"billing_newly_started":"#sales-ch","zero_cost_projects":"#cs-ch"}` | `alerts.yaml` の `channel` フィールドを上書きする JSON。**未設定の場合は `alerts.yaml` に書かれたチャンネル名がそのまま使われる**。全アラート分を設定すること |
 
 **Secrets（外部に漏らしたくない値）**
 
