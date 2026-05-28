@@ -244,6 +244,38 @@ resource "google_service_account_iam_member" "terraform_acts_as_compute_default"
   member             = "serviceAccount:${var.terraform_sa_email}"
 }
 
+# ===================================================================
+# IAM — Cloud Functions ビルド SA（Compute Engine デフォルト SA）
+# Cloud Functions Gen2 のビルド時に Cloud Build がこの SA として動作する。
+# 新プロジェクトでは組織ポリシーにより自動付与されないため明示的に付与する。
+# ===================================================================
+
+resource "google_project_iam_member" "compute_default_log_writer" {
+  project = var.project_id
+  role    = "roles/logging.logWriter"
+  member  = "serviceAccount:${data.google_project.project.number}-compute@developer.gserviceaccount.com"
+}
+
+resource "google_project_iam_member" "compute_default_artifact_writer" {
+  project = var.project_id
+  role    = "roles/artifactregistry.writer"
+  member  = "serviceAccount:${data.google_project.project.number}-compute@developer.gserviceaccount.com"
+}
+
+resource "google_storage_bucket_iam_member" "compute_default_source_access" {
+  bucket = google_storage_bucket.function_source.name
+  role   = "roles/storage.objectAdmin"
+  member = "serviceAccount:${data.google_project.project.number}-compute@developer.gserviceaccount.com"
+}
+
+# Cloud Functions が内部で使う GCF 管理バケット（gcf-v2-sources-{PROJECT_NUMBER}-{REGION}）への読み取り権限
+# このバケットは Cloud Functions 初回デプロイ時に GCP が自動作成する
+resource "google_storage_bucket_iam_member" "compute_default_gcf_source_viewer" {
+  bucket = "gcf-v2-sources-${data.google_project.project.number}-${var.region}"
+  role   = "roles/storage.objectViewer"
+  member = "serviceAccount:${data.google_project.project.number}-compute@developer.gserviceaccount.com"
+}
+
 # Cloud Scheduler ジョブは oidc_token で sa-scheduler を指定するため actAs が必要
 resource "google_service_account_iam_member" "terraform_acts_as_scheduler" {
   count              = var.terraform_sa_email != "" ? 1 : 0
@@ -262,6 +294,10 @@ resource "time_sleep" "iam_propagation" {
     google_service_account_iam_member.terraform_acts_as_alert_handler,
     google_service_account_iam_member.terraform_acts_as_compute_default,
     google_service_account_iam_member.terraform_acts_as_scheduler,
+    google_project_iam_member.compute_default_log_writer,
+    google_project_iam_member.compute_default_artifact_writer,
+    google_storage_bucket_iam_member.compute_default_source_access,
+    google_storage_bucket_iam_member.compute_default_gcf_source_viewer,
   ]
   create_duration = "120s"
   triggers = {
