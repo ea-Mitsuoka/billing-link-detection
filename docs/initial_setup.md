@@ -267,6 +267,30 @@ echo -n "xoxb-YOUR-BOT-TOKEN" | \
 gcloud secrets versions access latest --secret=slack-bot-token --project=PROJECT_ID
 ```
 
+### 3-4. Bot を通知先チャンネルへ招待
+
+`chat:write.public` スコープにより **パブリックチャンネルへの招待は不要**。\
+**プライベートチャンネル**を通知先にする場合は、チャンネルごとに Bot を招待する必要がある。
+
+招待方法（いずれかの方法で実施）：
+
+**方法 A: チャンネル内でスラッシュコマンド**
+
+招待したいプライベートチャンネルを開き、メッセージ欄に入力して送信：
+
+```
+/invite @billing-link-detection
+```
+
+**方法 B: チャンネル設定から追加**
+
+1. プライベートチャンネルを開く
+1. 右上のチャンネル名をクリック →「メンバーを追加」
+1. 検索欄に `billing-link-detection` と入力 → 選択して「追加」
+
+> `ALERT_CHANNEL_OVERRIDES`（GitHub Variables）に設定したプライベートチャンネル **すべて** に対して実施すること。\
+> 招待されていないプライベートチャンネルへの投稿は Slack API が `not_in_channel` エラーを返し、Cloud Logging に ERROR が記録される。
+
 ______________________________________________________________________
 
 ## Terraform 実行
