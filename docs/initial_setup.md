@@ -26,13 +26,14 @@ ______________________________________________________________________
 ### 1-1. プロジェクトの作成と請求先リンク
 
 ```bash
+PROJECT_ID="<project_id>"
 # プロジェクト作成
-gcloud projects create PROJECT_ID --name="billing-link-detection"
-gcloud config set project PROJECT_ID
+gcloud projects create $PROJECT_ID --name="billing-link-detection"
+gcloud config set project $PROJECT_ID
 
-# このシステム自体の運用費用を負担するサブアカウントとリンク
-gcloud billing projects link PROJECT_ID \
-  --billing-account=BILLING_ACCOUNT_ID
+# このシステム自体の運用費用を負担するアカウントとリンク
+gcloud billing projects link $PROJECT_ID \
+  --billing-account=$BILLING_ACCOUNT_ID
 ```
 
 > `BILLING_ACCOUNT_ID` はこのシステムの運用費用を払うサブアカウントのID（監視対象の顧客アカウントとは別）。
@@ -65,9 +66,9 @@ Terraform自身をTerraformで管理できないため、state管理バケット
 ### 2-1. Terraform state用GCSバケットの作成
 
 ```bash
-BUCKET_NAME="PROJECT_ID-tfstate"
+BUCKET_NAME="${PROJECT_ID}-tfstate"
 
-gsutil mb -p PROJECT_ID -l asia-northeast1 gs://${BUCKET_NAME}
+gsutil mb -p $PROJECT_ID -l asia-northeast1 gs://${BUCKET_NAME}
 
 # 誤削除防止・state履歴管理のためバージョニングを有効化
 gsutil versioning set on gs://${BUCKET_NAME}
@@ -78,13 +79,13 @@ gsutil versioning set on gs://${BUCKET_NAME}
 ```bash
 gcloud iam service-accounts create sa-terraform \
   --display-name="Terraform Executor" \
-  --project=PROJECT_ID
+  --project=$PROJECT_ID
 ```
 
 ### 2-3. 必要なロールの付与
 
 ```bash
-SA_EMAIL="sa-terraform@PROJECT_ID.iam.gserviceaccount.com"
+SA_EMAIL="sa-terraform@${PROJECT_ID}.iam.gserviceaccount.com"
 
 for ROLE in \
   roles/iam.serviceAccountAdmin \
@@ -100,7 +101,7 @@ for ROLE in \
   roles/monitoring.admin \
   roles/cloudbuild.builds.editor \
   roles/iam.serviceAccountTokenCreator; do
-  gcloud projects add-iam-policy-binding PROJECT_ID \
+  gcloud projects add-iam-policy-binding $PROJECT_ID \
     --member="serviceAccount:${SA_EMAIL}" \
     --role="${ROLE}"
 done
@@ -146,25 +147,26 @@ CI/CD は **GitHub Actions** を採用する。Workload Identity Federation（WI
 ```bash
 # Workload Identity Pool の作成
 gcloud iam workload-identity-pools create "github-pool" \
-  --project=PROJECT_ID \
+  --project=$PROJECT_ID \
   --location="global" \
   --display-name="GitHub Actions Pool"
 
 # Provider の作成
 gcloud iam workload-identity-pools providers create-oidc "github-provider" \
-  --project=PROJECT_ID \
+  --project=$PROJECT_ID \
   --location="global" \
   --workload-identity-pool="github-pool" \
   --display-name="GitHub Actions Provider" \
   --attribute-mapping="google.subject=assertion.sub,attribute.repository=assertion.repository" \
+  --attribute-condition="attribute.repository == 'ea-Mitsuoka/billing-link-detection'" \
   --issuer-uri="https://token.actions.githubusercontent.com"
 
 # PROJECT_NUMBER（数値ID。PROJECT_ID とは別物）を取得
-PROJECT_NUMBER=$(gcloud projects describe PROJECT_ID --format="value(projectNumber)")
+PROJECT_NUMBER=$(gcloud projects describe $PROJECT_ID --format="value(projectNumber)")
 
 # SA への Impersonation 権限付与（ORG/REPO は実際のリポジトリ名に変更）
 gcloud iam service-accounts add-iam-policy-binding ${SA_EMAIL} \
-  --project=PROJECT_ID \
+  --project=$PROJECT_ID \
   --role="roles/iam.workloadIdentityUser" \
   --member="principalSet://iam.googleapis.com/projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/github-pool/attribute.repository/ORG/REPO"
 ```
@@ -174,38 +176,38 @@ gcloud iam service-accounts add-iam-policy-binding ${SA_EMAIL} \
 上記コマンドの実行後、`WIF_PROVIDER`（GitHub Secret）に設定するフルパスを取得する：
 
 ```bash
-PROJECT_NUMBER=$(gcloud projects describe PROJECT_ID --format="value(projectNumber)")
+PROJECT_NUMBER=$(gcloud projects describe $PROJECT_ID --format="value(projectNumber)")
 echo "projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/github-pool/providers/github-provider"
 ```
 
 出力された値をそのまま次の §2-6 の `WIF_PROVIDER` Secret に設定する。\
 （GCP コンソールからも確認可能：「IAM と管理」→「Workload Identity 連携」→ `github-pool` → `github-provider` をクリックしてプロバイダ名をコピー）
 
-### 2-6. GitHub Variables / Secrets の登録
+### 2-6. GitHub Secrets / Variables の登録
 
 `.github/workflows/deploy.yml` から参照する値を GitHub リポジトリの Settings → Secrets and variables → Actions で登録する。
-
-**Variables（非機密・コード上に出てよい値）**
-
-| 名前 | 値の例 | 用途 |
-|---|---|---|
-| `GCP_PROJECT_ID` | `your-project-id` | 分析システム側のプロジェクト ID。Terraform / Docker 認証先 |
-| `BILLING_EXPORT_PROJECT_ID` | `billing-export-project-id` | Billing Export 専用プロジェクト ID。**構成 A（単一プロジェクト）の場合は空文字** |
-| `BILLING_EXPORT_DATASET` | `billing_data` | Billing Export のデータセット名（terraform.tfvars と同じ値） |
-| `MONITORING_SLACK_CHANNEL` | `#alerts-gcp-billing` | Cloud Monitoring のシステムエラー通知先 |
-| `MONITORING_CHANNEL_DISPLAY_NAME` | `Slack - alerts-gcp-billing` | Phase 4-2 で手動作成した Notification Channel の display_name。**初回 apply 時は空文字でも可（アラートポリシーは notification なしで作られる）** |
-| `ALERT_CHANNEL_OVERRIDES` | `{"billing_newly_started":"#sales-ch","zero_cost_projects":"#cs-ch"}` | `alerts.yaml` の `channel` フィールドを上書きする JSON。**未設定の場合は `alerts.yaml` に書かれたチャンネル名がそのまま使われる**。全アラート分を設定すること |
 
 **Secrets（外部に漏らしたくない値）**
 
 | 名前 | 値の例 | 用途 |
 |---|---|---|
-| `PARENT_BILLING_ACCOUNT` | `XXXXXX-YYYYYY-ZZZZZZ` | 親請求先アカウントID |
 | `BILLING_EXPORT_TABLE` | `gcp_billing_export_v1_XXXXXX` | Billing Export のテーブル名。**テーブル名に親請求先アカウントIDが含まれるため Secret で管理** |
-| `WIF_PROVIDER` | `projects/PROJECT_NUMBER/locations/global/workloadIdentityPools/github-pool/providers/github-provider` | 2-5 で作成した WIF Provider のフルパス |
+| `PARENT_BILLING_ACCOUNT` | `XXXXXX-YYYYYY-ZZZZZZ` | 親請求先アカウントID |
 | `TERRAFORM_SA_EMAIL` | `sa-terraform@PROJECT_ID.iam.gserviceaccount.com` | 2-2 で作成した Terraform 実行用 SA |
+| `WIF_PROVIDER` | `projects/PROJECT_NUMBER/locations/global/workloadIdentityPools/github-pool/providers/github-provider` | 2-5 で作成した WIF Provider のフルパス |
 
-> GitHub Variables と Secrets の使い分け：Slack チャンネル名・データセット名などはログ・PR コメントに表示されても問題ないので Variables、親請求先アカウントIDや WIF Provider パスのように漏洩リスクがあるものは Secrets を使う。\
+**Variables（非機密・コード上に出てよい値）**
+
+| 名前 | 値の例 | 用途 |
+|---|---|---|
+| `ALERT_CHANNEL_OVERRIDES` | `{"billing_newly_started":"#sales-ch","zero_cost_projects":"#cs-ch"}` | `alerts.yaml` の `channel` フィールドを上書きする JSON。**未設定の場合は `alerts.yaml` に書かれたチャンネル名がそのまま使われる**。全アラート分を設定すること |
+| `BILLING_EXPORT_DATASET` | `billing_data` | Billing Export のデータセット名（terraform.tfvars と同じ値） |
+| `BILLING_EXPORT_PROJECT_ID` | `billing-export-project-id` | Billing Export 専用プロジェクト ID。**構成 A（単一プロジェクト）の場合は空文字** |
+| `GCP_PROJECT_ID` | `your-project-id` | 分析システム側のプロジェクト ID。Terraform / Docker 認証先 |
+| `MONITORING_SLACK_CHANNEL` | `#alerts-gcp-billing` | Cloud Monitoring のシステムエラー通知先 |
+| `MONITORING_CHANNEL_DISPLAY_NAME` | `Slack - alerts-gcp-billing` | Phase 4-2 で手動作成した Notification Channel の display_name。**初回 apply 時は空文字でも可（アラートポリシーは notification なしで作られる）** |
+
+> GitHub Secrets と Variables の使い分け：Slack チャンネル名・データセット名などはログ・PR コメントに表示されても問題ないので Variables、親請求先アカウントIDや WIF Provider パスのように漏洩リスクがあるものは Secrets を使う。\
 > `BILLING_EXPORT_TABLE` のテーブル名は `gcp_billing_export_v1_XXXXXX-YYYYYY-ZZZZZZ` 形式で親請求先アカウントIDが埋め込まれるため、同様に Secret で管理する。
 
 ______________________________________________________________________
@@ -244,8 +246,9 @@ ______________________________________________________________________
 1. 構成 B の場合: Billing Export 専用プロジェクト側で **Terraform 実行 SA（sa-terraform）に `roles/bigquery.admin` を付与** する（クロスプロジェクトのデータセット IAM 操作のため）
 
    ```bash
-   gcloud projects add-iam-policy-binding EXPORT_PROJECT_ID \
-     --member="serviceAccount:sa-terraform@ANALYSIS_PROJECT_ID.iam.gserviceaccount.com" \
+   EXPORT_PROJECT_ID=""
+   gcloud projects add-iam-policy-binding $EXPORT_PROJECT_ID \
+     --member="serviceAccount:sa-terraform@${PROJECT_ID}.iam.gserviceaccount.com" \
      --role="roles/bigquery.admin"
    ```
 
@@ -272,10 +275,10 @@ ______________________________________________________________________
 echo -n "xoxb-YOUR-BOT-TOKEN" | \
   gcloud secrets create slack-bot-token \
     --data-file=- \
-    --project=PROJECT_ID
+    --project=$PROJECT_ID
 
 # 登録確認
-gcloud secrets versions access latest --secret=slack-bot-token --project=PROJECT_ID
+gcloud secrets versions access latest --secret=slack-bot-token --project=$PROJECT_ID
 ```
 
 ### 3-4. Bot を通知先チャンネルへ招待
@@ -289,7 +292,7 @@ gcloud secrets versions access latest --secret=slack-bot-token --project=PROJECT
 
 招待したいプライベートチャンネルを開き、メッセージ欄に入力して送信：
 
-```
+```plaintext
 /invite @billing-link-detection
 ```
 
@@ -309,9 +312,10 @@ ______________________________________________________________________
 Phase 1〜3 が完了したら Terraform を実行する。
 
 ```bash
-terraform init
+cd terraform
+terraform init -backend-config="bucket=${PROJECT_ID}-tfstate"
 terraform plan
-terraform apply
+terraform apply -auto-approve
 ```
 
 ______________________________________________________________________
@@ -326,12 +330,12 @@ ______________________________________________________________________
 ```bash
 # 親請求先アカウントに Billing Account Viewer を付与
 gcloud billing accounts add-iam-policy-binding PARENT_BILLING_ACCOUNT_ID \
-  --member="serviceAccount:sa-billing-collector@PROJECT_ID.iam.gserviceaccount.com" \
+  --member="serviceAccount:sa-billing-collector@${PROJECT_ID}.iam.gserviceaccount.com" \
   --role="roles/billing.viewer"
 
 # 付与後の確認
 gcloud billing accounts get-iam-policy PARENT_BILLING_ACCOUNT_ID \
-  --filter="bindings.members:sa-billing-collector@PROJECT_ID.iam.gserviceaccount.com"
+  --filter="bindings.members:sa-billing-collector@${PROJECT_ID}.iam.gserviceaccount.com"
 ```
 
 > SA のメールアドレスは `terraform output billing_collector_sa_email` でも確認できる。
