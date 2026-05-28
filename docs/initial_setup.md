@@ -270,10 +270,15 @@ ______________________________________________________________________
 
 ### 3-3. Bot Token を Secret Manager に登録
 
+> **注意**: この手順は **Terraform 実行後（Phase 4 の前）に行う**。  
+> Terraform が `google_secret_manager_secret` リソースとして Secret の箱を作成するため、事前に `gcloud secrets create` を実行すると "already exists" エラーが発生する。
+
+Terraform 実行後、箱だけ存在している Secret にトークン値を追加する：
+
 ```bash
-# Secret の作成とトークンの登録
+# Terraform apply 後に実行（バージョンの追加のみ）
 echo -n "xoxb-YOUR-BOT-TOKEN" | \
-  gcloud secrets create slack-bot-token \
+  gcloud secrets versions add slack-bot-token \
     --data-file=- \
     --project=$PROJECT_ID
 
@@ -317,6 +322,8 @@ terraform init -backend-config="bucket=${PROJECT_ID}-tfstate"
 terraform plan
 terraform apply -auto-approve
 ```
+
+apply 完了後、**§3-3 の Bot Token 登録**（`gcloud secrets versions add`）を実行してから Phase 4 へ進む。
 
 ______________________________________________________________________
 
