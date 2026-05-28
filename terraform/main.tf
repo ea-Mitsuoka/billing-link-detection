@@ -41,7 +41,7 @@ resource "google_bigquery_table" "billing_project_links" {
   ])
 
   lifecycle {
-    prevent_destroy = true
+    prevent_destroy = false
   }
 
   depends_on = [google_bigquery_dataset.billing_data]
