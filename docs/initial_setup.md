@@ -386,7 +386,7 @@ ______________________________________________________________________
 
 ## リポジトリ構成
 
-```
+```plaintext
 billing-link-detection/
 ├── batch/                          # Cloud Run Jobs（データ収集バッチ）
 │   ├── Dockerfile
