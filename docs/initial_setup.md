@@ -270,7 +270,7 @@ ______________________________________________________________________
 
 ### 3-3. Bot Token を Secret Manager に登録
 
-> **注意**: この手順は **Terraform 実行後（Phase 4 の前）に行う**。  
+> **注意**: この手順は **Terraform 実行後（Phase 4 の前）に行う**。\
 > Terraform が `google_secret_manager_secret` リソースとして Secret の箱を作成するため、事前に `gcloud secrets create` を実行すると "already exists" エラーが発生する。
 
 Terraform 実行後、箱だけ存在している Secret にトークン値を追加する：
