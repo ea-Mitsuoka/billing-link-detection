@@ -7,7 +7,9 @@
       "Bash(terraform state list *)",
       "Bash(gcloud run jobs executions describe *)",
       "Bash(make lint *)",
-      "Bash(make test *)"
+      "Bash(make test *)",
+      "Bash(find *)",
+      "Bash(grep *)"
     ]
   }
 }
