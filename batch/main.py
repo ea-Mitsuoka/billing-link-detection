@@ -311,6 +311,10 @@ def _step_monthly_cost(bq: bigquery.Client, batch_run_at: datetime, run_id: str)
           COUNT(DISTINCT currency) AS currency_count
         FROM `{BILLING_EXPORT_PROJECT}.{BILLING_EXPORT_DATASET}.{BILLING_EXPORT_TABLE}`
         WHERE invoice.month = '{prev_month}'
+          -- project.id が NULL/空 の行（税金・調整・プロジェクト非紐付きのサブスク課金等）は除外する。
+          -- 残すと _tmp_monthly_cost.project_id（REQUIRED）へのロードが失敗し、月次バッチが MERGE 到達前に落ちる。
+          AND project.id IS NOT NULL
+          AND project.id != ''
         GROUP BY project.id, billing_account_id
     """
     rows = list(bq.query(agg_sql).result())

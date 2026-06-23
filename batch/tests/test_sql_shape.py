@@ -111,6 +111,24 @@ def test_monthly_aggregation_filters_by_prev_month_yyyymm(batch_module):
     assert "invoice.month = '202604'" in agg_sql
 
 
+def test_monthly_aggregation_excludes_null_project(batch_module):
+    """project.id が NULL/空 の行を除外する。
+
+    Billing Export には税金・調整・プロジェクト非紐付きサブスク課金など project.id=NULL の行が
+    含まれる。除外しないと _tmp_monthly_cost.project_id（REQUIRED）へのロードが失敗し、
+    月次バッチが MERGE 到達前にクラッシュして prev_month_cost が更新されなくなる（リグレッション防止）。
+    """
+    bq = MagicMock()
+    bq.query.return_value.result.return_value = iter([])
+
+    batch_module._step_monthly_cost(
+        bq, batch_run_at=datetime(2026, 5, 1, tzinfo=timezone.utc), run_id="x"
+    )
+    agg_sql = _capture_query_sql(bq)[0]
+    assert "project.id IS NOT NULL" in agg_sql
+    assert "project.id != ''" in agg_sql
+
+
 def test_step6_7_skipped_when_export_table_missing(batch_module, monkeypatch):
     """BILLING_EXPORT_TABLE 未設定時は ever_billed 更新をスキップする（早期警告）。"""
     monkeypatch.setattr(batch_module, "BILLING_EXPORT_TABLE", "")
