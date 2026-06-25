@@ -142,6 +142,6 @@ alerts:
       WHERE prev2.total_cost > 0             -- ゼロ除算を回避（前々月に課金実績がある場合のみ比較）
         AND prev.total_cost > prev2.total_cost * 1.30  -- 閾値: 30%増加。変更する場合はここを修正
       ORDER BY increase_pct DESC
-    channel: "#cs-alerts"           # 要変更：CS向けチャンネル
+    channel: "#business_alerts_billing"
     message: "プロジェクト非紐付きのサブスクリプション課金（Gemini Enterprise / Looker Studio Pro 等）が前月比30%以上増加しました"
     enabled: true

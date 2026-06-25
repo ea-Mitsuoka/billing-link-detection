@@ -361,6 +361,37 @@ def _step_monthly_cost(bq: bigquery.Client, batch_run_at: datetime, run_id: str)
         ),
     ).result()
 
+    # Guard: 下の MERGE は LEFT JOIN + COALESCE(..., 0.0) のため、_tmp_monthly_cost と
+    # 1 件も結合しない状況（Export がその月だけ空・テーブル名/月の誤り・結合キー不一致）でも
+    # 全レコードを静かに 0 円で上書きしてしまう。実データを 0 で潰す前にここで検知して中断する。
+    # links テーブルが空（初回デプロイ直後）の場合は保護対象が無いのでガードしない。
+    guard_sql = f"""
+        SELECT
+          (SELECT COUNT(*) FROM `{PROJECT_ID}.{BQ_DATASET}.billing_project_links`) AS link_count,
+          (SELECT COUNT(*) FROM `{PROJECT_ID}.{BQ_DATASET}._tmp_monthly_cost`)      AS cost_count,
+          (SELECT COUNT(*)
+             FROM `{PROJECT_ID}.{BQ_DATASET}.billing_project_links` AS L
+             JOIN `{PROJECT_ID}.{BQ_DATASET}._tmp_monthly_cost`     AS C
+               ON  L.project_id     = C.project_id
+               AND L.sub_account_id = C.sub_account_id) AS matched_count
+    """
+    guard = list(bq.query(guard_sql).result())[0]
+    if guard["link_count"] > 0 and guard["matched_count"] == 0:
+        raise RuntimeError(
+            f"monthly cost guard tripped: 0 of {guard['link_count']} link rows matched "
+            f"{guard['cost_count']} cost rows (prev_month={prev_month}, run_id={run_id}). "
+            "Aborting before MERGE overwrites prev_month_cost with all-zero "
+            "(likely empty/incorrect billing export or a join-key mismatch)."
+        )
+    logger.info(
+        "monthly cost guard passed",
+        extra={"json_fields": {
+            "run_id": run_id, "operation": "monthly_cost_guard",
+            "link_count": guard["link_count"], "cost_count": guard["cost_count"],
+            "matched_count": guard["matched_count"],
+        }},
+    )
+
     # Step 2: MERGE — LEFT JOIN ensures non-appearing records get prev_month_cost = 0
     merge_sql = f"""
         MERGE `{PROJECT_ID}.{BQ_DATASET}.billing_project_links` AS T
