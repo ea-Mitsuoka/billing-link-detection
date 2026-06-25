@@ -62,6 +62,44 @@ flowchart TD
 >
 > Billing Export 設定前（初回構築中）は月次バッチがエラーになるのが正常。`BILLING_EXPORT_TABLE` を設定すれば解消する。
 
+### 「月次バッチが失敗する / `prev_month_cost` が全件 0・NULL のまま」
+
+月次バッチ（`billing-cost-updater`）特有の代表的な失敗モードと対処。
+
+#### (A) `Only optional fields can be set to NULL. Field: project_id`
+
+- **原因**: Billing Export には `project.id` が NULL の行（税金・調整・プロジェクト非紐付きのサブスク課金など）が常に含まれる。月次の集計でこれを除外しないと、中間テーブル `_tmp_monthly_cost`（`project_id` は REQUIRED）への `load_table_from_json` が失敗し、**MERGE 到達前にバッチがクラッシュ**する。
+- **影響**: MERGE が走らないため `prev_month_cost` が更新されず、過去の値（0 や NULL）のまま据え置かれる。
+- **対処**: 集計 SQL に `AND project.id IS NOT NULL AND project.id != ''` があることを確認（[batch/main.py](../batch/main.py) `_step_monthly_cost`）。これは修正済み・回帰テスト `test_monthly_aggregation_excludes_null_project` で保護。NULL 行の有無は次で確認できる:
+
+  ```sql
+  SELECT COUNTIF(project.id IS NULL OR project.id = '') AS null_project_rows, COUNT(*) AS total_rows
+  FROM `${BILLING_EXPORT_PROJECT_ID}.billing_data.gcp_billing_export_v1_XXX`
+  WHERE invoice.month = FORMAT_DATE('%Y%m', DATE_SUB(DATE_TRUNC(CURRENT_DATE('Asia/Tokyo'), MONTH), INTERVAL 1 MONTH));
+  ```
+
+#### (B) `monthly cost guard tripped: 0 of N link rows matched ...`
+
+- **意味**: MERGE 実行前のガードが「`billing_project_links` の行が 1 件も `_tmp_monthly_cost` と結合しなかった」ことを検知して中断した。月次 MERGE は `LEFT JOIN + COALESCE(..., 0.0)` のため、放置すると**全レコードを静かに 0 円で上書き**してしまう。それを防ぐための意図的な異常終了。
+- **想定原因**: ①その月の Billing Export がまだ空（請求確定前）/ ②`BILLING_EXPORT_TABLE` のテーブル名・対象月が誤り / ③結合キー（`project_id` / `sub_account_id` = Export の `billing_account_id`）の不一致。
+- **対処**: **単純な再実行はしない**。まず結合状況を確認してから原因を潰す:
+
+  ```sql
+  -- links と Export 集計の結合マッチ数を確認（matched_both_keys が 0 なら結合不成立）
+  WITH export_agg AS (
+    SELECT project.id AS project_id, billing_account_id AS sub_account_id
+    FROM `${BILLING_EXPORT_PROJECT_ID}.billing_data.gcp_billing_export_v1_XXX`
+    WHERE invoice.month = FORMAT_DATE('%Y%m', DATE_SUB(DATE_TRUNC(CURRENT_DATE('Asia/Tokyo'), MONTH), INTERVAL 1 MONTH))
+    GROUP BY project.id, billing_account_id
+  )
+  SELECT
+    (SELECT COUNT(*) FROM export_agg) AS export_rows,
+    (SELECT COUNT(*) FROM `${GCP_PROJECT_ID}.billing_data.billing_project_links` L
+       JOIN export_agg E ON L.project_id = E.project_id AND L.sub_account_id = E.sub_account_id) AS matched_both_keys;
+  ```
+
+> **重要（リカバリのタイムリミット）**: 月次バッチが対象とする月は「**実行時刻の前月**」を月単位で決める（[batch/main.py](../batch/main.py) `_prev_month_yyyymm`）。例えば 6 月中に手動再実行すれば 5 月分を埋められるが、7 月にずれ込むと前月＝6 月になり 5 月分は埋められなくなる。**復旧は対象月の翌月内に実施すること。**
+
 ______________________________________________________________________
 
 ## 日常運用タスク
