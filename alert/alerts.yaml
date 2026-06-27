@@ -4,15 +4,15 @@ alerts:
     schedule: "0 9 * * *"           # 毎日 09:00 JST（日次バッチ 02:00 完了後）
     query: |
       SELECT
-        sub_account_name,
-        project_id,
-        first_billed_month,
-        FORMAT_TIMESTAMP('%Y-%m-%d', linked_at, 'Asia/Tokyo') AS linked_date
+        sub_account_name   AS `顧客名`,
+        project_id         AS `プロジェクトID`,
+        first_billed_month AS `初回課金月`,
+        FORMAT_TIMESTAMP('%Y-%m-%d', linked_at, 'Asia/Tokyo') AS `リンク日`
       FROM `{project}.{dataset}.billing_project_links`
       WHERE billing_newly_started = TRUE
       ORDER BY first_billed_month DESC, sub_account_name
     channel: "#sales-alerts"        # 要変更：営業向けチャンネル
-    message: "課金開始プロジェクトが検出されました"
+    message: "🆕【課金開始】これまで未課金だったプロジェクトで課金が始まりました（営業フォロー対象）"
     enabled: true
 
   - name: zero_cost_projects
@@ -20,17 +20,17 @@ alerts:
     schedule: "0 9 6 * *"           # 毎月6日 09:00 JST（月次バッチが5日 03:00 完了後）
     query: |
       SELECT
-        sub_account_name,
-        project_id,
-        prev_month_cost,
-        ever_billed,
-        FORMAT_TIMESTAMP('%Y-%m-%d', linked_at, 'Asia/Tokyo') AS linked_date
+        sub_account_name AS `顧客名`,
+        project_id       AS `プロジェクトID`,
+        prev_month_cost  AS `前月請求額`,
+        ever_billed      AS `過去課金実績`,
+        FORMAT_TIMESTAMP('%Y-%m-%d', linked_at, 'Asia/Tokyo') AS `リンク日`
       FROM `{project}.{dataset}.billing_project_links`
       WHERE prev_month_cost = 0
         AND status = 'ACTIVE'
       ORDER BY ever_billed, linked_at, sub_account_name
     channel: "#cs-alerts"           # 要変更：CS向けチャンネル
-    message: "前月請求が0円のプロジェクト一覧"
+    message: "💤【0円プロジェクト】前月の請求が0円のアクティブなプロジェクト一覧"
     enabled: true
 
   - name: never_billed_projects
@@ -38,15 +38,15 @@ alerts:
     schedule: "0 9 1 * *"           # 毎月1日 09:00 JST
     query: |
       SELECT
-        sub_account_name,
-        project_id,
-        FORMAT_TIMESTAMP('%Y-%m-%d', linked_at, 'Asia/Tokyo') AS linked_date
+        sub_account_name AS `顧客名`,
+        project_id       AS `プロジェクトID`,
+        FORMAT_TIMESTAMP('%Y-%m-%d', linked_at, 'Asia/Tokyo') AS `リンク日`
       FROM `{project}.{dataset}.billing_project_links`
       WHERE ever_billed = FALSE
         AND status = 'ACTIVE'
       ORDER BY linked_at, sub_account_name
     channel: "#cs-alerts"           # 要変更：CS向けチャンネル
-    message: "過去に一度も課金がないプロジェクト一覧"
+    message: "🈳【未課金】これまで一度も課金実績のないアクティブなプロジェクト一覧"
     enabled: true
 
   - name: cost_surge_projects
@@ -80,11 +80,11 @@ alerts:
           WHERE yyyymm = FORMAT_DATE('%Y%m', DATE_SUB(DATE_TRUNC(CURRENT_DATE('Asia/Tokyo'), MONTH), INTERVAL 2 MONTH))
         )
       SELECT
-        bpl.sub_account_name,
-        bpl.project_id,
-        ROUND(prev2.total_cost, 2)                                               AS two_months_ago_cost,
-        ROUND(prev.total_cost,  2)                                               AS last_month_cost,
-        ROUND((prev.total_cost - prev2.total_cost) / prev2.total_cost * 100, 1) AS increase_pct
+        bpl.sub_account_name                                                     AS `顧客名`,
+        bpl.project_id                                                           AS `プロジェクトID`,
+        ROUND(prev2.total_cost, 2)                                               AS `前々月請求額`,
+        ROUND(prev.total_cost,  2)                                               AS `前月請求額`,
+        ROUND((prev.total_cost - prev2.total_cost) / prev2.total_cost * 100, 1)  AS `増加率パーセント`
       FROM prev
       JOIN prev2 USING (sub_account_id, project_id)
       JOIN `{project}.{dataset}.billing_project_links` bpl
@@ -93,9 +93,9 @@ alerts:
       WHERE prev2.total_cost > 0             -- ゼロ除算を回避（前々月に課金実績がある場合のみ比較）
         AND prev.total_cost > prev2.total_cost * 1.30  -- 閾値: 30%増加。変更する場合はここを修正
         AND bpl.status = 'ACTIVE'
-      ORDER BY increase_pct DESC
+      ORDER BY `増加率パーセント` DESC
     channel: "#cs-alerts"           # 要変更：CS向けチャンネル
-    message: "前月の請求金額が前々月より30%以上増加したプロジェクトが検出されました"
+    message: "📈【コスト急増】前月の請求額が前々月より30%以上増加したプロジェクト"
     enabled: true
 
   - name: subscription_cost_surge
@@ -132,16 +132,16 @@ alerts:
           WHERE yyyymm = FORMAT_DATE('%Y%m', DATE_SUB(DATE_TRUNC(CURRENT_DATE('Asia/Tokyo'), MONTH), INTERVAL 2 MONTH))
         )
       SELECT
-        prev.billing_account_id,
-        prev.service_name,
-        ROUND(prev2.total_cost, 2)                                               AS two_months_ago_cost,
-        ROUND(prev.total_cost,  2)                                               AS last_month_cost,
-        ROUND((prev.total_cost - prev2.total_cost) / prev2.total_cost * 100, 1) AS increase_pct
+        prev.billing_account_id                                                  AS `サブアカウントID`,
+        prev.service_name                                                        AS `サービス名`,
+        ROUND(prev2.total_cost, 2)                                               AS `前々月請求額`,
+        ROUND(prev.total_cost,  2)                                               AS `前月請求額`,
+        ROUND((prev.total_cost - prev2.total_cost) / prev2.total_cost * 100, 1)  AS `増加率パーセント`
       FROM prev
       JOIN prev2 USING (billing_account_id, service_name)
       WHERE prev2.total_cost > 0             -- ゼロ除算を回避（前々月に課金実績がある場合のみ比較）
         AND prev.total_cost > prev2.total_cost * 1.30  -- 閾値: 30%増加。変更する場合はここを修正
-      ORDER BY increase_pct DESC
+      ORDER BY `増加率パーセント` DESC
     channel: "#business_alerts_billing"
-    message: "プロジェクト非紐付きのサブスクリプション課金（Gemini Enterprise / Looker Studio Pro 等）が前月比30%以上増加しました"
+    message: "📈【サブスク急増】プロジェクト非紐付きのサブスクリプション課金（Gemini Enterprise / Looker Studio Pro 等）が前月比30%以上増加しました"
     enabled: true
